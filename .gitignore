@@ -21,3 +21,6 @@ dist/
 
 # Delegated coding deliverables (dated run folders + auto-run logs)
 minihermes_workspace/
+
+data/procurement/
+data/procurement-acceptance/
