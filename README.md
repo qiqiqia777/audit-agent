@@ -1,4 +1,26 @@
-# mini-hermes
+# 采购申请审批助手 · Audit Agent
+
+本仓库基于 MiniHermes，为公司内部采购申请提供材料检查和制度依据。事件驱动邮箱主工程管理邮件、申请版本、负责人决定及通知。负责人可用下面的设备申请样例验证材料检查。
+
+```python
+from minihermes.ops.procurement import review_equipment
+
+result = review_equipment({
+    "item": "显示器", "purpose": "设计校色", "spec": "27 英寸",
+    "quantity": 2, "amount": "1200.55", "price_basis": "unit",
+})
+print(result["status"], result["estimated_total_cny"])  # ready_for_review 2401.10
+```
+
+数量使用整数，人民币报价使用十进制字符串，`unit` 表示每件单价，`total` 表示整批总价。费用口径未知时省略 `price_basis`，从返回的 `questions` 读取补件问题和制度条款编号；`clauses` 包含该版本条文。设备样例可运行 `python -m pytest -q evals/deterministic/test_procurement.py` 验证。
+
+公开产品范围、分阶段交付和验收边界见 [采购审批交付说明](docs/procurement-delivery.md)。三周验收按以下顺序推进。
+
+1. **办公设备。** 虚构员工用真实测试邮箱提交完整申请，负责人登录页面查看并批准，保留入站记录、决定记录和员工收到的通知。
+2. **软件订阅与补件。** 5 席、12 个月、120 元/月，区分单席和全部席位口径，对应总额 7,200 和 1,440 元。补件后 5 席改为 8 席，旧页面禁止审批；新版显示差异和 11,520 元。制度引用、限本部门已办结的同类案例和跨部门拒绝均需可验证。
+3. **可靠性与交付。** 验证重复事件、重启续办、歧义回复的人工归属、催办到期去重与撤销、决定与送达状态分别记录。实际收信、补件和结果通知用真实测试邮箱验证，异常路径用受控故障复现。交付部署说明、架构说明和区分实测方式的测试报告。
+
+## 上游 MiniHermes
 
 **Your own AI assistant. On your laptop. In code you can read in an afternoon.**
 
