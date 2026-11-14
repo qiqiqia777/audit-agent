@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+state.db
+traces/
+*.ics
+.DS_Store
+dist/
+.pytest_cache/
+.ruff_cache/
+.minihermes/
+.minihermes.bak-*/
+.minihermes.prerename-bak/
+.env.prerename-bak
+
+# Keep legacy runtime state ignored while an existing install still uses it.
+.waku/
+.waku.bak-*/
+.waku.prerename-bak/
+
+# Delegated coding deliverables (dated run folders + auto-run logs)
+minihermes_workspace/
