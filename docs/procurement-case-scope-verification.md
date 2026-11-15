@@ -23,7 +23,7 @@ test_same_software_history_keeps_current_purpose_required_and_department_private
 Ruff 与运行时 skill validator 通过。11 项跳过为既有真实模型用例，当前未配置活动提供商密钥；
 judge 同样跳过，不能把 gate open 写成真实模型验收完成。
 
-## 浏览器：已补齐受控演示证据，人工 QA 待反馈
+## 浏览器：受控演示证据已齐
 
 早期内置浏览器首次创建标签页超时。恢复 inventory 后尝试使用现有 Edge 窗口，工具明确报告：
 无法充分确定当前 Windows 浏览器 URL 以执行策略，并停止本轮 Computer Use。
@@ -54,7 +54,7 @@ judge 同样跳过，不能把 gate open 写成真实模型验收完成。
 决定未产生及收件箱为空由原有公开 HTTP 回归重新验证，区别于上表浏览器实际操作。
 本轮先复跑演示文件 2 passed；完整 gate 再跑为 277 passed、11 live skipped，
 Ruff 和运行时 skill 校验通过；anthropic 无活动 key，judge skipped。
-本轮不新增真实模型或真实邮件投递，也不是用户人工 QA。
+上述自动化走查不新增真实模型或真实邮件投递，不等同于用户人工 QA；用户反馈见下节。
 
 手动复演可在新目录运行 python -m scripts.procurement_demo --directory data/procurement-acceptance/case-check-new --port 8093，
 打开 http://127.0.0.1:8093/ ，用 design / demo-only 登录。
@@ -62,5 +62,15 @@ Ruff 和运行时 skill 校验通过；anthropic 无活动 key，judge skipped�
 确认缺项、禁用的批准按钮、本部门历史链接和原记录；切换 sales / demo-only，核对列表及直接访问拒绝。
 每轮用新目录以保留已有证据，不清空运行数据。
 
-Issue #15 的受控浏览器缺口已补齐，仍保持开放等待用户人工 QA；父 #3/#4 亦保持开放。
-原 PR #21 继续 draft，不把新增截图当作用户验收反馈。
+## 用户人工 QA：通过（2026-11-15）
+
+用户在本机演示服务 `http://127.0.0.1:18115/` 自行检查后分两次确认：
+
+- 设计部当前 #2 提示补业务用途、批准按钮不可点击；同部门历史摘要显示
+  「设计部历史出图 · 1200.00 元 · 批准」，点击编号能打开历史原记录。用户反馈「是的符合」。
+- 切换 sales 后列表只有销售部 #4，不含设计部 #2/#5；直接访问设计部当前 #2 和历史 #5
+  地址均显示 404。用户反馈「是的」。
+
+这些反馈仅确认上述页面行为，不代表用户验证了直接 POST、真实模型或真实邮件。
+直接 POST 拒绝和无决定/通知由已记录的 HTTP 回归覆盖。#15 的约定验收项及人工 QA 已齐，
+可在最终审查与最新 CI 通过后通过原 PR #21 合入闭环；父 #3/#4 仍等待其他子任务。
