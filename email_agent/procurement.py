@@ -465,9 +465,40 @@ class ProcurementStore:
                 WHERE department=? AND category=? AND decision IS NOT NULL AND id!=? ORDER BY id DESC LIMIT 10""",
                 (department, row["category"], application_id),
             ).fetchall()
+            versions = [
+                dict(r)
+                for r in db.execute(
+                    "SELECT version,materials,review FROM revisions WHERE application_id=? ORDER BY version",
+                    (application_id,),
+                )
+            ]
+            original = db.execute(
+                "SELECT body FROM original_mail WHERE mail_key=?", (row["inbound_key"],)
+            ).fetchone()
+            received = (
+                [{"message_id": row["inbound_key"].removeprefix("mid:"), "body": original["body"]}]
+                if original
+                else []
+            )
+            received.extend(
+                dict(r)
+                for r in db.execute(
+                    "SELECT mail_key AS message_id,body FROM incoming_changes WHERE applied_to=? ORDER BY rowid",
+                    (application_id,),
+                )
+            )
         result = dict(row)
         for key in ("materials", "review"):
             result[key] = json.loads(result[key])
+        versions.append(
+            {"version": row["version"], "materials": row["materials"], "review": row["review"]}
+        )
+        result["versions"] = [
+            entry
+            | {"materials": json.loads(entry["materials"]), "review": json.loads(entry["review"])}
+            for entry in versions
+        ]
+        result["mail_history"] = received
         result["cases"] = [
             {
                 "id": h["id"],
