@@ -42,6 +42,7 @@ IAB 浏览器截图，覆盖同款历史获批仍缺用途、授权原记录、�
 | 催办及网络等待时的维护入口 | 模拟网络、实际维护线程和 SQLite；受控时钟及有序并发 | [运行验证](procurement-runtime-verification.md) |
 | 通知异常、补发与核实 | 模拟 SMTP 拒收/断连、实际页面 HTTP 路由和 SQLite | evals/deterministic/test_procurement_notifications.py |
 | 原文历史与隔离 | 实际 HTTP 路由，模拟两部门和含脚本的邮件 | evals/deterministic/test_procurement_web.py |
+| 补件和通知故障恢复 | 拒收/断连 IAB 浏览器走查；补件逐次记录、核实、重试、并发/旧表单 HTTP 回归 | [#18 恢复记录](procurement-send-recovery-verification.md)，真实邮箱与人工 QA 仍待验收 |
 
 早期浏览器自动化初始化失败，相关历史记录未把 HTTP 表单结果写成浏览器通过。
 本次仅 #15 已追加上述实际 IAB 结果，不代表所有现场流程或用户人工验收已完成。

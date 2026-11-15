@@ -1,9 +1,11 @@
 """Persist equipment applications from the purchasing mailbox."""
 
 import json
+import math
+import os
 import re
 import sqlite3
-from contextlib import closing
+from contextlib import closing, contextmanager
 from email.utils import make_msgid, parseaddr
 from pathlib import Path
 
@@ -105,6 +107,13 @@ class ProcurementStore:
                     sent_at REAL, due_at REAL, message_id TEXT, closed_at TEXT,
                     UNIQUE(application_id,version,kind)
                 );
+                CREATE TABLE IF NOT EXISTS followup_attempts(
+                    id INTEGER PRIMARY KEY, followup_id INTEGER NOT NULL,
+                    actor TEXT NOT NULL, recipient TEXT NOT NULL, body TEXT NOT NULL,
+                    state TEXT NOT NULL, message_id TEXT, receipt TEXT,
+                    wait_seconds REAL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    completed_at TEXT, verified_by TEXT, verification_note TEXT, verified_at TEXT
+                );
                 CREATE TABLE IF NOT EXISTS incoming_changes(
                     mail_key TEXT PRIMARY KEY, sender TEXT, department TEXT, patch TEXT,
                     candidates TEXT, applied_to INTEGER, body TEXT
@@ -140,6 +149,27 @@ class ProcurementStore:
             # Preserve decisions created by earlier versions, including uncertain sends.
             with db:
                 db.execute("BEGIN IMMEDIATE")
+                for row in db.execute("""SELECT f.*,a.sender FROM followups f JOIN applications a ON a.id=f.application_id
+                    WHERE f.state IN ('sent','failed','unknown') AND NOT EXISTS
+                    (SELECT 1 FROM followup_attempts t WHERE t.followup_id=f.id)""").fetchall():
+                    duration = (
+                        row["due_at"] - row["sent_at"]
+                        if row["due_at"] is not None and row["sent_at"] is not None
+                        else None
+                    )
+                    db.execute(
+                        """INSERT INTO followup_attempts
+                        (followup_id,actor,recipient,body,state,message_id,wait_seconds)
+                        VALUES(?,'migration',?,?,?,?,?)""",
+                        (
+                            row["id"],
+                            row["sender"],
+                            row["body"],
+                            row["state"],
+                            row["message_id"],
+                            duration,
+                        ),
+                    )
                 for row in db.execute("""SELECT * FROM applications WHERE decision IS NOT NULL
                     AND NOT EXISTS(SELECT 1 FROM notification_attempts WHERE application_id=applications.id)""").fetchall():
                     db.execute(
@@ -159,6 +189,43 @@ class ProcurementStore:
         db.row_factory = sqlite3.Row
         return db
 
+    @contextmanager
+    def delivery_lock(self, kind, ident):
+        """Hold across claim/send/finish; process exit releases the OS lock.
+
+        Retain lock files: unlinking one could let another process lock a different inode.
+        Network send callers must use this scope so verification cannot race delivery.
+        """
+        if kind not in ("followup", "notification"):
+            raise ValueError("无效发送类型")
+        directory = self.path.resolve().parent / ".delivery-locks" / self.path.name
+        directory.mkdir(parents=True, exist_ok=True)
+        with (directory / f"{kind}-{int(ident)}.lock").open("a+b") as handle:
+            handle.seek(0, 2)
+            if not handle.tell():
+                handle.write(b"\0")
+                handle.flush()
+            handle.seek(0)
+            try:
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                raise ValueError("该发送仍在进行，请等待结果后再核实或补发") from exc
+            try:
+                yield
+            finally:
+                handle.seek(0)
+                if os.name == "nt":
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     def intake(self, event: Event, staff: dict[str, str]) -> int | None:
         """staff maps registered mailbox addresses to their departments."""
         from minihermes.ops.procurement import review_equipment, review_subscription
@@ -173,8 +240,10 @@ class ProcurementStore:
             with closing(self.connect()) as db, db:
                 outbound = db.execute(
                     """SELECT application_id FROM followups WHERE message_id=?
-                    UNION ALL SELECT application_id FROM notification_attempts WHERE message_id=? LIMIT 1""",
-                    (marker, marker),
+                    UNION ALL SELECT application_id FROM notification_attempts WHERE message_id=?
+                    UNION ALL SELECT f.application_id FROM followup_attempts t JOIN followups f
+                    ON f.id=t.followup_id WHERE t.message_id=? LIMIT 1""",
+                    (marker, marker, marker),
                 ).fetchone()
                 if outbound:
                     db.execute(
@@ -208,8 +277,9 @@ class ProcurementStore:
                 message_id
                 and db.execute(
                     """SELECT 1 FROM followups WHERE message_id=?
-                UNION ALL SELECT 1 FROM notification_attempts WHERE message_id=? LIMIT 1""",
-                    (message_id, message_id),
+                UNION ALL SELECT 1 FROM notification_attempts WHERE message_id=?
+                UNION ALL SELECT 1 FROM followup_attempts WHERE message_id=? LIMIT 1""",
+                    (message_id, message_id, message_id),
                 ).fetchone()
             ):
                 return None
@@ -255,9 +325,10 @@ class ProcurementStore:
                     matched.add(alias[0])
                 outbound = db.execute(
                     """SELECT f.application_id FROM followups f JOIN applications a
-                    ON a.id=f.application_id WHERE f.message_id=? AND a.sender=? AND a.department=?
+                    ON a.id=f.application_id LEFT JOIN followup_attempts t ON t.followup_id=f.id
+                    WHERE (f.message_id=? OR t.message_id=?) AND a.sender=? AND a.department=?
                     AND a.decision IS NULL""",
-                    (reference, sender, department),
+                    (reference, reference, sender, department),
                 ).fetchone()
                 if outbound:
                     matched.add(outbound[0])
@@ -382,6 +453,15 @@ class ProcurementStore:
                     draft("reminder", "补件提醒：" + request_text)
             return [
                 dict(r)
+                | {
+                    "attempts": [
+                        dict(a)
+                        for a in db.execute(
+                            "SELECT * FROM followup_attempts WHERE followup_id=? ORDER BY id",
+                            (r["id"],),
+                        )
+                    ]
+                }
                 for r in db.execute(
                     "SELECT * FROM followups WHERE application_id=? ORDER BY id", (ident,)
                 )
@@ -400,7 +480,17 @@ class ProcurementStore:
         for row in due:
             self.followups(row["id"], row["department"], now)
 
-    def claim_followup(self, ident, department, draft_id):
+    def claim_followup(
+        self,
+        ident,
+        department,
+        draft_id,
+        manager="legacy",
+        expected_attempt=None,
+        wait_seconds=172800,
+    ):
+        if not math.isfinite(wait_seconds) or wait_seconds <= 0:
+            raise ValueError("无效等待时间")
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             if self.model_review:
@@ -412,19 +502,77 @@ class ProcurementStore:
                 ).fetchone()
                 if not ready:
                     raise ValueError("本版本的模型审查尚未完成")
+            previous = db.execute(
+                "SELECT * FROM followup_attempts WHERE followup_id=? ORDER BY id DESC LIMIT 1",
+                (draft_id,),
+            ).fetchone()
+            parent = db.execute("SELECT state FROM followups WHERE id=?", (draft_id,)).fetchone()
+            if parent and parent["state"] == "failed":
+                if (
+                    not previous
+                    or previous["state"] != "failed"
+                    or previous["id"] != expected_attempt
+                ):
+                    raise ValueError("发送记录已变化，请重新核对")
+            elif not parent or parent["state"] != "draft":
+                raise ValueError("草稿已撤销、已发送或结果尚待核实")
             result = db.execute(
-                """UPDATE followups SET state='unknown',message_id=? WHERE id=? AND application_id=? AND state='draft'
+                """UPDATE followups SET state='unknown',message_id=? WHERE id=? AND application_id=? AND state IN ('draft','failed')
+                AND closed_at IS NULL
                 AND version=(SELECT version FROM applications WHERE id=? AND department=? AND decision IS NULL)""",
                 (make_msgid(domain="audit-agent.local"), draft_id, ident, ident, department),
             )
             if not result.rowcount:
                 raise ValueError("草稿已撤销、已发送或申请已更新")
-            return dict(db.execute("SELECT * FROM followups WHERE id=?", (draft_id,)).fetchone())
+            row = dict(db.execute("SELECT * FROM followups WHERE id=?", (draft_id,)).fetchone())
+            recipient = db.execute(
+                "SELECT sender FROM applications WHERE id=?", (ident,)
+            ).fetchone()[0]
+            attempt = db.execute(
+                """INSERT INTO followup_attempts
+                (followup_id,actor,recipient,body,state,message_id,wait_seconds)
+                VALUES(?,?,?,?,'unknown',?,?)""",
+                (draft_id, manager, recipient, row["body"], row["message_id"], wait_seconds),
+            ).lastrowid
+            return row | {"attempt_id": attempt}
 
-    def finish_followup(self, draft_id, state, now, wait_seconds, message_id=None):
+    def finish_followup(
+        self, draft_id, state, now, wait_seconds, message_id=None, *, attempt_id=None, receipt=None
+    ):
         if state not in ("sent", "failed", "unknown") or wait_seconds <= 0:
             raise ValueError("无效的发送结果或等待时间")
         with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            attempt = db.execute(
+                "SELECT * FROM followup_attempts WHERE followup_id=? ORDER BY id DESC LIMIT 1",
+                (draft_id,),
+            ).fetchone()
+            if (
+                attempt_id is None
+                and db.execute(
+                    "SELECT COUNT(*) FROM followup_attempts WHERE followup_id=?", (draft_id,)
+                ).fetchone()[0]
+                > 1
+            ):
+                raise ValueError("重试结果必须关联发送记录")
+            if (
+                not attempt
+                or attempt["state"] != "unknown"
+                or attempt["verified_at"]
+                or (attempt_id is not None and attempt["id"] != attempt_id)
+            ):
+                return
+            db.execute(
+                """UPDATE followup_attempts SET state=?,message_id=COALESCE(?,message_id),
+                receipt=?,wait_seconds=?,completed_at=CURRENT_TIMESTAMP WHERE id=?""",
+                (
+                    state,
+                    message_id,
+                    json.dumps(receipt or {}, ensure_ascii=False),
+                    wait_seconds,
+                    attempt["id"],
+                ),
+            )
             db.execute(
                 """UPDATE followups SET state=?,sent_at=?,due_at=?,message_id=COALESCE(?,message_id) WHERE id=? AND state='unknown'""",
                 (
@@ -432,6 +580,64 @@ class ProcurementStore:
                     now if state == "sent" else None,
                     now + wait_seconds if state == "sent" else None,
                     message_id,
+                    draft_id,
+                ),
+            )
+
+    def verify_followup(
+        self, ident, department, draft_id, attempt_id, manager, delivered, note, now, sent_at=None
+    ):
+        if delivered not in ("yes", "no") or not note.strip():
+            raise ValueError("请填写核实结果及依据")
+        if delivered == "yes" and (
+            sent_at is None or not math.isfinite(sent_at) or sent_at < 0 or sent_at > now
+        ):
+            raise ValueError("请填写经核实的实际发出时间")
+        with self.delivery_lock("followup", draft_id), closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                """SELECT f.* FROM followups f JOIN applications a ON a.id=f.application_id
+                WHERE f.id=? AND a.id=? AND a.department=?""",
+                (draft_id, ident, department),
+            ).fetchone()
+            if row is None:
+                raise LookupError("未找到本部门补件记录")
+            application = db.execute(
+                "SELECT version,decision FROM applications WHERE id=?", (ident,)
+            ).fetchone()
+            if (
+                row["closed_at"]
+                or application["decision"]
+                or application["version"] != row["version"]
+            ):
+                raise ValueError("原补件等待已结束或申请已更新")
+            latest = db.execute(
+                "SELECT * FROM followup_attempts WHERE followup_id=? ORDER BY id DESC LIMIT 1",
+                (draft_id,),
+            ).fetchone()
+            if (
+                not latest
+                or latest["id"] != attempt_id
+                or latest["state"] != "unknown"
+                or row["state"] != "unknown"
+            ):
+                raise ValueError("发送记录已变化")
+            if delivered == "yes" and (
+                latest["wait_seconds"] is None or latest["wait_seconds"] <= 0
+            ):
+                raise ValueError("旧发送记录未保存等待时长，不能推算原截止；请保留待核实状态")
+            state = "sent" if delivered == "yes" else "failed"
+            db.execute(
+                """UPDATE followup_attempts SET state=?,verified_by=?,verification_note=?,
+                verified_at=CURRENT_TIMESTAMP WHERE id=?""",
+                (state, manager, note.strip(), attempt_id),
+            )
+            db.execute(
+                "UPDATE followups SET state=?,sent_at=?,due_at=? WHERE id=?",
+                (
+                    state,
+                    sent_at if state == "sent" else None,
+                    sent_at + latest["wait_seconds"] if state == "sent" else None,
                     draft_id,
                 ),
             )
@@ -773,7 +979,7 @@ class ProcurementStore:
     def verify_notification(self, ident, department, manager, attempt_id, delivered, note):
         if delivered not in ("yes", "no") or not note.strip():
             raise ValueError("请填写核实结果和依据")
-        with closing(self.connect()) as db, db:
+        with self.delivery_lock("notification", ident), closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute(
                 "SELECT id FROM applications WHERE id=? AND department=?", (ident, department)
