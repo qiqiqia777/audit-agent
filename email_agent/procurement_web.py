@@ -117,7 +117,17 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
                     draft = store.claim_followup(ident, dept, int(request.form["followup"]))
                     receipt = {}
                     try:
-                        receipt = deliver(dict(record, mail_kind="补件"), draft["body"]) or {}
+                        receipt = (
+                            deliver(
+                                dict(
+                                    record,
+                                    mail_kind="补件",
+                                    outbound_message_id=draft["message_id"],
+                                ),
+                                draft["body"],
+                            )
+                            or {}
+                        )
                         status = "sent"
                     except (
                         smtplib.SMTPResponseException,

@@ -38,6 +38,7 @@ def send_email(
     msg["Subject"] = subject
     msg["Date"] = formatdate(localtime=True)
     msg["Message-ID"] = message_id or make_msgid(domain=_domain(from_addr))
+    msg["X-Audit-Message-ID"] = str(msg["Message-ID"])
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
     if references:
