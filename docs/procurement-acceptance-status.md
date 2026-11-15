@@ -2,6 +2,8 @@
 
 核对日期为 2026-11-15。此表记录阶段证据，完整验收仍在进行。
 
+剩余工作已拆为 [#15–#19](procurement-remaining-tickets.md)，按 [开发流程](development-workflow.md) 逐票交付。
+
 ## 需求与证据
 
 | 需求 | 当前证据 | 仍需完成 |
