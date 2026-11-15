@@ -1,7 +1,6 @@
 ---
 name: to-spec
 description: Consolidate agreed requirements into a procurement specification using the existing tracker and project vocabulary.
-disable-model-invocation: true
 ---
 
 Read docs/development-workflow.md, GLOSSARY.md and relevant ADRs.

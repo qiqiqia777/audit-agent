@@ -1,7 +1,6 @@
 ---
 name: implement
 description: Complete one ready procurement ticket through focused implementation, behavior verification and independent review.
-disable-model-invocation: true
 ---
 
 Read docs/development-workflow.md and fetch the chosen ticket. State its title and baseline SHA.

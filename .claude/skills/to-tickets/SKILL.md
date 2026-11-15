@@ -1,7 +1,6 @@
 ---
 name: to-tickets
 description: Split remaining procurement requirements into independently verifiable vertical tickets with explicit blocking relationships.
-disable-model-invocation: true
 ---
 
 Read docs/development-workflow.md and the source Issue body/comments plus current evidence.
