@@ -423,8 +423,10 @@ class ProcurementStore:
             if row is None:
                 raise LookupError("未找到本部门申请")
             earlier = db.execute(
-                "SELECT materials, review FROM revisions WHERE application_id=? ORDER BY version DESC LIMIT 1",
-                (application_id,),
+                """SELECT materials, review FROM revisions WHERE application_id=?
+                ORDER BY (version IN (SELECT version FROM review_jobs
+                    WHERE application_id=? AND state='completed')) DESC, version DESC LIMIT 1""",
+                (application_id, application_id),
             ).fetchone()
             history = db.execute(
                 """SELECT id,category,materials,review,decision FROM applications
@@ -529,6 +531,32 @@ class ProcurementStore:
                 (ident,),
             )
 
+    def request_recheck(self, ident, department, version):
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute(
+                "SELECT * FROM applications WHERE id=? AND department=?", (ident, department)
+            ).fetchone()
+            if row is None:
+                raise LookupError("未找到本部门申请")
+            job = db.execute(
+                "SELECT state FROM review_jobs WHERE application_id=? AND version=?",
+                (ident, version),
+            ).fetchone()
+            if (
+                row["version"] != version
+                or row["decision"]
+                or not job
+                or job["state"] not in ("completed", "failed")
+            ):
+                raise ValueError("申请已更新、已决定或仍在审查")
+            db.execute(
+                "INSERT INTO revisions VALUES(?,?,?,?)",
+                (ident, version, row["materials"], row["review"]),
+            )
+            db.execute("UPDATE applications SET version=version+1 WHERE id=?", (ident,))
+            self._enqueue_review(db, ident)
+
     def claim_review(self):
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
@@ -557,6 +585,13 @@ class ProcurementStore:
                 )
             ]
         snapshot["sources"] = ([original[0]] if original else []) + changes
+        from minihermes.ops.procurement import review_equipment, review_subscription
+
+        confirmed = {}
+        for body in snapshot["sources"]:
+            confirmed.update(equipment_fields(body))
+        rule = review_subscription if snapshot["category"] == "software" else review_equipment
+        snapshot["confirmed_materials"] = rule(confirmed)["materials"]
         return {"job": dict(job), "snapshot": snapshot}
 
     def finish_review(self, job, result=None, error=None):

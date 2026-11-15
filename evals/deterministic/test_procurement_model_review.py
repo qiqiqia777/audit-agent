@@ -137,3 +137,54 @@ def test_unstructured_reply_cannot_bypass_tool_submission(tmp_path):
     assert store.detail(ident, "设计")["model_review"]["state"] == "failed"
     with pytest.raises(ValueError):
         store.decide(ident, "设计", "manager", 1, "approved")
+
+
+def test_diff_uses_last_completed_review_not_intermediate_rule_calculation(tmp_path):
+    store, ident, inbound = new_application(tmp_path)
+    assert work_once(store, script(), "offline-test")
+    old_page_version = store.detail(ident, "设计")["version"]
+    inbound("<seats@test>", "改成8席", f"采购申请 #{ident}")
+    materials = MATERIALS | {"seats": 8}
+    evidence = {key: BODY for key in MATERIALS} | {"seats": "改成8席"}
+    assert work_once(store, script(materials=materials, evidence=evidence), "offline-test")
+    record = store.detail(ident, "设计")
+    assert record["changes"]["seats"] == (5, 8)
+    assert record["changes"]["预计总额"] == ("7200.00", "11520.00")
+    with pytest.raises(ValueError):
+        store.decide(ident, "设计", "manager", old_page_version, "approved")
+
+
+def test_latest_explicit_seat_change_rejects_model_reversion_and_can_retry(tmp_path):
+    store, ident, inbound = new_application(tmp_path)
+    work_once(store, script(), "offline-test")
+    inbound("<latest@test>", "改成8席", f"采购申请 #{ident}")
+    wrong = {
+        "materials": MATERIALS,
+        "evidence": {key: BODY for key in MATERIALS},
+        "clause_ids": ["SW-1"],
+        "case_ids": [],
+        "summary": "旧席位",
+    }
+    corrected = wrong | {
+        "materials": MATERIALS | {"seats": 8},
+        "evidence": wrong["evidence"] | {"seats": "改成8席"},
+    }
+    client = ScriptedClient(
+        [
+            response(
+                [
+                    tool_block("read_request", {}, "a"),
+                    tool_block("read_policy", {}, "b"),
+                    tool_block("search_cases", {}, "c"),
+                ],
+                "tool_use",
+            ),
+            response([tool_block("submit_review", wrong, "d")], "tool_use"),
+            response([tool_block("submit_review", corrected, "e")], "tool_use"),
+            response([text_block("已按最新8席修正")]),
+        ]
+    )
+    assert work_once(store, client, "offline-test")
+    record = store.detail(ident, "设计")
+    assert record["materials"]["seats"] == 8
+    assert record["review"]["estimated_total_cny"] == "11520.00"
