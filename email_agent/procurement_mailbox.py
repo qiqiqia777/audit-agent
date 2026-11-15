@@ -33,7 +33,9 @@ def main(argv=None):
     staff = {mailbox.strip().casefold(): dept for mailbox, dept in roster["staff"].items()}
     directory = cfg.data_dir / "procurement"
     directory.mkdir(parents=True, exist_ok=True)
-    inbox = ProcurementInbox(ProcurementStore(directory / "applications.sqlite"), staff)
+    inbox = ProcurementInbox(
+        ProcurementStore(directory / "applications.sqlite", model_review=True), staff
+    )
     poller = ImapPoller(inbox, cfg.imap, directory, poll_interval=cfg.poll_interval_seconds)
     if args.once:
         poller.poll_once()

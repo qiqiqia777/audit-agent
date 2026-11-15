@@ -1,14 +1,15 @@
 """Read-only material review for office equipment requests (CNY)."""
 
+import json
 import re
+from pathlib import Path
 from decimal import Decimal
 
 
-POLICY_VERSION = "演示采购制度 v1.0"
-CLAUSES = {
-    "EQ-1": "设备申请须写明采购对象、业务用途、具体规格和正整数数量。",
-    "EQ-2": "预计费用须为人民币正金额，精确到分，并标明为单件报价或整批总价。口径不清须先补件。",
-}
+POLICY_PATH = Path(__file__).with_name("procurement_policy.json")
+POLICY = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
+POLICY_VERSION = POLICY["version"]
+CLAUSES = POLICY["categories"]["equipment"]
 
 
 def review_equipment(application: dict) -> dict:
@@ -38,11 +39,19 @@ def review_equipment(application: dict) -> dict:
     ):
         summary["amount"] = str(amount)
     else:
-        questions.append({"field": "amount", "question": "请提供有效人民币报价，最多两位小数。", "clause": "EQ-2"})
+        questions.append(
+            {
+                "field": "amount",
+                "question": "请提供有效人民币报价，最多两位小数。",
+                "clause": "EQ-2",
+            }
+        )
     if basis in ("unit", "total"):
         summary["price_basis"] = basis
     else:
-        questions.append({"field": "price_basis", "question": "报价为每件单价还是整批总价？", "clause": "EQ-2"})
+        questions.append(
+            {"field": "price_basis", "question": "报价为每件单价还是整批总价？", "clause": "EQ-2"}
+        )
 
     total = None
     if "amount" in summary and "price_basis" in summary and "quantity" in summary:
@@ -63,14 +72,13 @@ def review_equipment(application: dict) -> dict:
 
 def review_subscription(application: dict) -> dict:
     """Review one software quote in CNY. Term is months; price is per billing period."""
-    clauses = {
-        "SW-1": "软件申请须说明采购对象、业务用途、正整数席位数和订阅期限。",
-        "SW-2": "须明确报价金额、计费周期及报价覆盖单席还是全部席位；不足整周期时须明确实际收费。",
-    }
+    clauses = POLICY["categories"]["software"].copy()
     summary = {}
     questions = []
+
     def missing(field, question, clause):
         questions.append({"field": field, "question": question, "clause": clause})
+
     for field, label in (("item", "采购对象"), ("purpose", "业务用途")):
         value = application.get(field)
         if isinstance(value, str) and value.strip():
@@ -100,7 +108,9 @@ def review_subscription(application: dict) -> dict:
         missing("price_basis", "报价是每席位价格，还是全部席位合计？", "SW-2")
     total = None
     if {"billing_period", "months"} <= summary.keys():
-        periods, remainder = divmod(summary["months"], {"monthly": 1, "quarterly": 3, "yearly": 12}[period])
+        periods, remainder = divmod(
+            summary["months"], {"monthly": 1, "quarterly": 3, "yearly": 12}[period]
+        )
         if remainder:
             missing("billing_period", "期限不足整计费周期，请确认实际收费口径。", "SW-2")
         elif {"price_basis", "amount", "seats"} <= summary.keys():
@@ -109,6 +119,11 @@ def review_subscription(application: dict) -> dict:
             if basis == "per_seat":
                 cents *= summary["seats"]
             total = f"{cents // 100}.{cents % 100:02d}"
-    return {"status": "needs_clarification" if questions else "ready_for_review",
-            "materials": summary, "estimated_total_cny": total, "questions": questions,
-            "policy_version": POLICY_VERSION, "clauses": clauses}
+    return {
+        "status": "needs_clarification" if questions else "ready_for_review",
+        "materials": summary,
+        "estimated_total_cny": total,
+        "questions": questions,
+        "policy_version": POLICY_VERSION,
+        "clauses": clauses,
+    }
