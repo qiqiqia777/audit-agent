@@ -133,6 +133,10 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             if request.method == "POST":
                 if "verify_followup" in request.form:
                     actual = request.form.get("sent_at", "").strip()
+                    try:
+                        sent_at = datetime.fromisoformat(actual).timestamp() if actual else None
+                    except (OSError, OverflowError) as exc:
+                        raise ValueError("请填写有效的实际发出时间") from exc
                     store.verify_followup(
                         ident,
                         dept,
@@ -142,7 +146,7 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
                         request.form.get("delivered"),
                         request.form.get("note", ""),
                         time.time(),
-                        datetime.fromisoformat(actual).timestamp() if actual else None,
+                        sent_at,
                     )
                     return redirect(url_for("detail", ident=ident))
                 if "recheck" in request.form:

@@ -132,6 +132,32 @@ def test_verified_delivery_uses_actual_send_time_and_rejects_late_result(tmp_pat
     assert len(calls) == 1
 
 
+def test_verification_rejects_unrepresentable_send_time_without_server_error(tmp_path):
+    store, ident, draft, client, token, calls, _ = recovery_portal(
+        tmp_path, "request", ConnectionResetError()
+    )
+    url = f"/requests/{ident}"
+    client.post(url, data={"csrf": token, "followup": draft["id"]})
+    before = store.followups(ident, "设计", time.time())[0]
+    attempt = before["attempts"][-1]
+    response = client.post(
+        url,
+        data={
+            "csrf": token,
+            "verify_followup": draft["id"],
+            "followup_attempt": attempt["id"],
+            "delivered": "yes",
+            "note": "核实邮件的时间填写有误",
+            "sent_at": "1900-01-01T00:00:00",
+        },
+    )
+    assert response.status_code == 409
+    after = store.followups(ident, "设计", time.time())[0]
+    assert after["state"] == "unknown" and after["due_at"] is None
+    assert after["attempts"] == before["attempts"]
+    assert len(calls) == 1
+
+
 def test_recovery_rejects_foreign_department_and_old_version(tmp_path):
     store, ident, draft, client, token, calls, login = recovery_portal(
         tmp_path, "request", ConnectionResetError()
