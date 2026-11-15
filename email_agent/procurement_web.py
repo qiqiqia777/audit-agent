@@ -3,16 +3,17 @@
 import argparse
 import hmac
 import json
+import os
+import time
 import secrets
 import smtplib
-from contextlib import closing
 from pathlib import Path
 
 from flask import Flask, abort, redirect, render_template_string, request, session, url_for
 from werkzeug.security import check_password_hash
 
 from email_agent.config import AppConfig
-from email_agent.procurement import ProcurementStore
+from email_agent.procurement import ProcurementStore, result_notice
 from email_agent.sending.smtp import send_email
 from email_agent.sending.whitelist import is_allowed
 
@@ -27,10 +28,12 @@ STATES = {
 
 
 def notice(record, decision):
-    return f"您的采购申请 #{record['id']}（{record['materials'].get('item') or '采购事项'}）已{DECISIONS[decision]}。"
+    return result_notice(record | {"decision": decision})
 
 
-def create_app(store, managers, deliver):
+def create_app(store, managers, deliver, wait_seconds=48 * 3600):
+    if wait_seconds <= 0:
+        raise ValueError("补件等待时间须为正数")
     app = Flask(__name__)
     app.secret_key = secrets.token_bytes(32)
     app.config.update(SESSION_COOKIE_SAMESITE="Strict", MAX_CONTENT_LENGTH=8192)
@@ -110,30 +113,66 @@ def create_app(store, managers, deliver):
         try:
             record = store.detail(ident, dept)
             if request.method == "POST":
-                choice = request.form.get("decision")
-                record = store.decide(
-                    ident, dept, manager, int(request.form.get("version", "")), choice
-                )
-                # A crash after claiming the send must leave a visible uncertain outcome.
-                with closing(store.connect()) as db, db:
-                    db.execute(
-                        "UPDATE applications SET notification_status='unknown' WHERE id=?", (ident,)
+                if "followup" in request.form:
+                    draft = store.claim_followup(ident, dept, int(request.form["followup"]))
+                    receipt = {}
+                    try:
+                        receipt = deliver(dict(record, mail_kind="补件"), draft["body"]) or {}
+                        status = "sent"
+                    except (
+                        smtplib.SMTPResponseException,
+                        smtplib.SMTPRecipientsRefused,
+                        PermissionError,
+                    ):
+                        status = "failed"
+                    except (OSError, smtplib.SMTPException):
+                        status = "unknown"
+                    store.finish_followup(
+                        draft["id"], status, time.time(), wait_seconds, receipt.get("message_id")
                     )
+                    return redirect(url_for("detail", ident=ident))
+                if "verify" in request.form:
+                    store.verify_notification(
+                        ident,
+                        dept,
+                        manager,
+                        int(request.form["attempt"]),
+                        request.form["verify"],
+                        request.form.get("note", ""),
+                    )
+                    return redirect(url_for("detail", ident=ident))
+                if "retry" not in request.form:
+                    choice = request.form.get("decision")
+                    record = store.decide(
+                        ident, dept, manager, int(request.form.get("version", "")), choice
+                    )
+                    attempt_id = record["notification_attempts"][-1]["id"]
+                else:
+                    attempt_id = int(request.form["attempt"])
+                attempt = store.claim_notification(ident, dept, manager, attempt_id)
+                receipt = {}
                 try:
-                    deliver(record, notice(record, choice))
+                    receipt = (
+                        deliver(
+                            record | {"outbound_message_id": attempt["message_id"]}, attempt["body"]
+                        )
+                        or {}
+                    )
                     state = "sent"
                 except (
                     smtplib.SMTPResponseException,
                     smtplib.SMTPRecipientsRefused,
                     PermissionError,
-                ):
+                ) as exc:
+                    receipt = {
+                        "error_type": type(exc).__name__,
+                        "smtp_code": getattr(exc, "smtp_code", None),
+                    }
                     state = "failed"
-                except (OSError, smtplib.SMTPException):
+                except (OSError, smtplib.SMTPException) as exc:
+                    receipt = {"error_type": type(exc).__name__}
                     state = "unknown"
-                with closing(store.connect()) as db, db:
-                    db.execute(
-                        "UPDATE applications SET notification_status=? WHERE id=?", (state, ident)
-                    )
+                store.finish_notification(attempt["id"], state, receipt)
                 return redirect(url_for("detail", ident=ident))
         except LookupError:
             abort(404)
@@ -148,15 +187,29 @@ def create_app(store, managers, deliver):
             <p>预计总额 {{r.review.estimated_total_cny or '待核实'}} 元</p><h2>{{r.review.policy_version}}</h2>
             {% for k,v in r.review.clauses.items() %}<p>{{k}} · {{v}}</p>{% endfor %}
             {% for q in r.review.questions %}<p>{{q.question}}（{{q.clause}}）</p>{% endfor %}
+            {% for draft in followups %}<p>{{draft.body}} · {{states.get(draft.state,draft.state)}}</p>
+            {% if draft.state=='draft' and not r.decision %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
+            <button name="followup" value="{{draft.id}}">{{'发送补件请求' if draft.kind=='request' else '确认发送催办'}}</button></form>{% endif %}{% endfor %}
             {% if r.changes %}<h2>材料变更</h2>{% for k,v in r.changes.items() %}<p>{{labels.get(k,k)}}：{{v[0]}} → {{v[1]}}</p>{% endfor %}{% endif %}
             {% if r.cases %}<h2>本部门已办结同类案例</h2>{% for c in r.cases %}<p><a href="{{url_for('detail',ident=c.id)}}">申请 #{{c.id}}</a> · {{'软件订阅' if c.category=='software' else '办公设备'}} · {{c.purpose}} · {{c.total}} 元 · {{decisions[c.decision]}}</p>{% endfor %}{% endif %}
             {% if r.decision %}<p>已{{decisions[r.decision]}} · {{r.decided_by}} · {{r.decided_at}} · {{states[r.notification_status]}}</p>
+            {% set latest=r.notification_attempts[-1] %}
+            <h2>发送记录</h2>{% for a in r.notification_attempts %}<p>第 {{loop.index}} 次 · {{states[a.state]}} · {{a.created_at}}</p>
+            <p>收件人 {{a.recipient}} · {{a.body}}</p>
+            {% if a.message_id %}<p>邮件编号 {{a.message_id}}</p>{% endif %}
+            {% if a.verified_by %}<p>核实人 {{a.verified_by}} · {{a.verification_note}} · {{a.verified_at}}</p>{% endif %}{% endfor %}
+            {% if latest.state in ['failed','pending'] %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
+            <input type="hidden" name="attempt" value="{{latest.id}}"><p>发送内容：{{latest.body}}</p><button name="retry">确认补发通知</button></form>
+            {% elif latest.state=='unknown' %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
+            <input type="hidden" name="attempt" value="{{latest.id}}"><label>请先核对邮箱与发送记录，填写依据 <input name="note" required></label>
+            <button name="verify" value="yes">确认已送达</button><button name="verify" value="no">确认未送达，允许补发</button></form>{% endif %}
             {% else %}{% for choice,body in previews.items() %}<form method="post">
             <p>发给 {{r.sender}}：{{body}}</p><input type="hidden" name="csrf" value="{{session.csrf}}">
             <input type="hidden" name="version" value="{{r.version}}"><button name="decision" value="{{choice}}"
             {% if choice=='approved' and r.review.questions %}disabled{% endif %}>{{decisions[choice]}}并通知</button>
             </form>{% endfor %}{% endif %}""",
             r=record,
+            followups=store.followups(ident, dept, time.time()),
             previews={c: notice(record, c) for c in DECISIONS},
             labels={
                 "item": "采购对象",
@@ -191,10 +244,11 @@ def smtp_delivery(cfg):
             password=smtp.password,
             from_addr=smtp.user,
             to=record["sender"],
-            subject=f"采购申请 #{record['id']} 处理结果",
+            subject=f"采购申请 #{record['id']} {record.get('mail_kind', '处理结果')}",
             body=body,
             in_reply_to=reply,
             references=reply,
+            message_id=record.get("outbound_message_id"),
         )
 
     return deliver
@@ -211,7 +265,10 @@ def main():
     directory = cfg.data_dir / "procurement"
     directory.mkdir(parents=True, exist_ok=True)
     app = create_app(
-        ProcurementStore(directory / "applications.sqlite"), roster["managers"], smtp_delivery(cfg)
+        ProcurementStore(directory / "applications.sqlite"),
+        roster["managers"],
+        smtp_delivery(cfg),
+        wait_seconds=int(os.getenv("PROCUREMENT_WAIT_SECONDS", "172800")),
     )
     app.run(host="127.0.0.1", port=args.port)
 
