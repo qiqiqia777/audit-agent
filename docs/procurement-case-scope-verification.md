@@ -19,6 +19,10 @@ test_same_software_history_keeps_current_purpose_required_and_department_private
 样例仍采用独立演示数据库和本地收件箱。它不是新增真实模型调用或真实邮件投递证据；
 既有真实模型/邮箱结果见 procurement-model-verification.md。
 
+自动化结果：演示 HTTP 文件 2 项通过；全量 release gate 为 277 passed、11 skipped；
+Ruff 与运行时 skill validator 通过。11 项跳过为既有真实模型用例，当前未配置活动提供商密钥；
+judge 同样跳过，不能把 gate open 写成真实模型验收完成。
+
 ## 浏览器：待验收
 
 本次内置浏览器首次创建标签页超时。恢复 inventory 后尝试使用现有 Edge 窗口，工具明确报告：
