@@ -302,6 +302,7 @@ class ImapPoller(ThreadedEventSource):
                     "message_id": mid,
                     "in_reply_to": header("in-reply-to"),
                     "references": header("references"),
+                    "audit_message_id": header("x-audit-message-id"),
                     "uid": str(getattr(m, "uid", "")),
                     "from": from_,
                     "to": to,

@@ -78,6 +78,9 @@ class ProcurementStore:
                 CREATE TABLE IF NOT EXISTS original_mail(
                     mail_key TEXT PRIMARY KEY, body TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS outbound_aliases(
+                    message_id TEXT PRIMARY KEY, application_id INTEGER NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS review_jobs(
                     id INTEGER PRIMARY KEY, application_id INTEGER NOT NULL, version INTEGER NOT NULL,
                     state TEXT NOT NULL DEFAULT 'pending', error TEXT, result TEXT,
@@ -160,6 +163,20 @@ class ProcurementStore:
         meta = event.metadata
         sender = parseaddr(meta.get("from", ""))[1].casefold()
         subject = meta.get("subject", "")
+        marker = meta.get("audit_message_id")
+        if marker and meta.get("message_id"):
+            with closing(self.connect()) as db, db:
+                outbound = db.execute(
+                    """SELECT application_id FROM followups WHERE message_id=?
+                    UNION ALL SELECT application_id FROM notification_attempts WHERE message_id=? LIMIT 1""",
+                    (marker, marker),
+                ).fetchone()
+                if outbound:
+                    db.execute(
+                        "INSERT OR IGNORE INTO outbound_aliases VALUES(?,?)",
+                        (meta["message_id"], outbound[0]),
+                    )
+                    return None
         if sender not in staff:
             return None
         message_id = meta.get("message_id")
@@ -181,6 +198,16 @@ class ProcurementStore:
         )
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
+            # Self-mail demos receive our own requests and result notifications too.
+            if (
+                message_id
+                and db.execute(
+                    """SELECT 1 FROM followups WHERE message_id=?
+                UNION ALL SELECT 1 FROM notification_attempts WHERE message_id=? LIMIT 1""",
+                    (message_id, message_id),
+                ).fetchone()
+            ):
+                return None
             db.execute(
                 "INSERT OR IGNORE INTO original_mail VALUES(?,?)",
                 (key, meta.get("email_thread", "")),
@@ -212,6 +239,23 @@ class ProcurementStore:
             ).fetchall()
             ref_keys = {"mid:" + ref for ref in refs}
             matched = {r["id"] for r in rows if r["inbound_key"] in ref_keys}
+            for reference in refs:
+                alias = db.execute(
+                    """SELECT o.application_id FROM outbound_aliases o JOIN applications a
+                    ON a.id=o.application_id WHERE o.message_id=? AND a.sender=? AND a.department=?
+                    AND a.decision IS NULL""",
+                    (reference, sender, department),
+                ).fetchone()
+                if alias:
+                    matched.add(alias[0])
+                outbound = db.execute(
+                    """SELECT f.application_id FROM followups f JOIN applications a
+                    ON a.id=f.application_id WHERE f.message_id=? AND a.sender=? AND a.department=?
+                    AND a.decision IS NULL""",
+                    (reference, sender, department),
+                ).fetchone()
+                if outbound:
+                    matched.add(outbound[0])
             for mid in ref_keys:
                 previous = db.execute(
                     "SELECT applied_to FROM incoming_changes WHERE mail_key=? AND sender=? AND department=?",
@@ -301,8 +345,9 @@ class ProcurementStore:
                 raise LookupError("未找到本部门申请")
             questions = json.loads(row["review"])["questions"]
             if questions and not row["decision"]:
-                request_text = f"请补充采购申请 #{ident} 的材料：" + " ".join(
-                    q["question"] for q in questions
+                request_text = (
+                    f"请补充采购申请 #{ident}（{json.loads(row['materials']).get('item') or '采购事项'}）的材料："
+                    + " ".join(q["question"] for q in questions)
                 )
 
                 def draft(kind, body):
@@ -338,9 +383,9 @@ class ProcurementStore:
                 if not ready:
                     raise ValueError("本版本的模型审查尚未完成")
             result = db.execute(
-                """UPDATE followups SET state='unknown' WHERE id=? AND application_id=? AND state='draft'
+                """UPDATE followups SET state='unknown',message_id=? WHERE id=? AND application_id=? AND state='draft'
                 AND version=(SELECT version FROM applications WHERE id=? AND department=? AND decision IS NULL)""",
-                (draft_id, ident, ident, department),
+                (make_msgid(domain="audit-agent.local"), draft_id, ident, ident, department),
             )
             if not result.rowcount:
                 raise ValueError("草稿已撤销、已发送或申请已更新")
@@ -349,7 +394,7 @@ class ProcurementStore:
     def finish_followup(self, draft_id, state, now, wait_seconds, message_id=None):
         with closing(self.connect()) as db, db:
             db.execute(
-                """UPDATE followups SET state=?,sent_at=?,due_at=?,message_id=? WHERE id=? AND state='unknown'""",
+                """UPDATE followups SET state=?,sent_at=?,due_at=?,message_id=COALESCE(?,message_id) WHERE id=? AND state='unknown'""",
                 (
                     state,
                     now if state == "sent" else None,
