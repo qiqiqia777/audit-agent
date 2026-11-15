@@ -26,6 +26,10 @@
 
 ## 关键验证记录
 
+2026-11-15：[#16 软件报价与旧标签页浏览器记录](procurement-software-browser-verification.md)
+补齐独立规则演示中的 7200/1440 元、5→8 席/11520 元、旧页拒绝及新版批准截图。
+全部席位的真实模型表达补证与用户人工 QA 尚缺；此记录不改变其他任务的验收状态。
+
 | 范围 | 方法 | 结果位置 |
 | --- | --- | --- |
 | 设备完整申请到通知 | 真实 IMAP/SMTP + HTTP 审批表单 | 原测试邮箱工程 data/procurement-acceptance/ae40861e2bd3/evidence.json，公开摘要在 PR #7 |
