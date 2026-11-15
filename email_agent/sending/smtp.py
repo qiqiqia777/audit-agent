@@ -27,6 +27,7 @@ def send_email(
     body: str,
     in_reply_to: str | None = None,
     references: str | None = None,
+    message_id: str | None = None,
     timeout: float = 30.0,
     factory=smtplib.SMTP_SSL,
 ) -> dict:
@@ -36,17 +37,23 @@ def send_email(
     msg["To"] = to
     msg["Subject"] = subject
     msg["Date"] = formatdate(localtime=True)
-    msg["Message-ID"] = make_msgid(domain=_domain(from_addr))
+    msg["Message-ID"] = message_id or make_msgid(domain=_domain(from_addr))
     if in_reply_to:
         msg["In-Reply-To"] = in_reply_to
     if references:
         msg["References"] = references
     msg.set_content(body)
 
-    with factory(host, port, timeout=timeout) as smtp:
-        smtp.login(user, password)
-        refused = smtp.send_message(msg)
-        if refused:
-            raise RuntimeError(f"收件人被服务器拒收: {refused}")
-        code, resp = smtp.noop()  # 250 回执证据（G8 主证据之一）
-    return {"message_id": msg["Message-ID"], "smtp_response": f"{code} {resp}"}
+    accepted = False
+    try:
+        with factory(host, port, timeout=timeout) as smtp:
+            smtp.login(user, password)
+            refused = smtp.send_message(msg)
+            if refused:
+                raise smtplib.SMTPRecipientsRefused(refused)
+            accepted = True
+    except (OSError, smtplib.SMTPException):
+        # A disconnect during QUIT cannot undo a completed DATA transaction.
+        if not accepted:
+            raise
+    return {"message_id": str(msg["Message-ID"]), "smtp_response": "DATA accepted"}
