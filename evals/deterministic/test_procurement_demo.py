@@ -35,6 +35,10 @@ def test_same_software_history_keeps_current_purpose_required_and_department_pri
     page = client.get(url).get_data(as_text=True)
     assert "设计部历史出图" in page and "销售部专用历史" not in page
     assert f"/requests/{history['id']}" in page
+    summary = re.search(
+        rf'<p><a href="/requests/{history["id"]}">.*?</p>', page, re.DOTALL
+    )[0]
+    assert all(value in summary for value in ("软件订阅", "设计部历史出图", "1200.00 元", "批准"))
     assert "请补充业务用途" in page
     assert re.search(r'<button[^>]*value="approved"\s+disabled', page)
     assert client.get(f"/requests/{history['id']}").status_code == 200
