@@ -23,7 +23,17 @@ def review_request(client, model, snapshot, max_iterations=6):
     def read_request():
         used.add("request")
         return json.dumps(
-            {k: snapshot[k] for k in ("id", "version", "category", "materials", "sources")},
+            {
+                k: snapshot.get(k, {})
+                for k in (
+                    "id",
+                    "version",
+                    "category",
+                    "materials",
+                    "sources",
+                    "confirmed_materials",
+                )
+            },
             ensure_ascii=False,
         )
 
@@ -47,6 +57,13 @@ def review_request(client, model, snapshot, max_iterations=6):
         )
         if not isinstance(materials, dict) or not materials.keys() <= fields:
             raise ValueError("包含未定义的材料字段")
+        for field, value in snapshot.get("confirmed_materials", {}).items():
+            if (
+                field not in materials
+                or materials[field] != value
+                or type(materials[field]) is not type(value)
+            ):
+                raise ValueError(f"{field} 必须保留后端从原文核对的值 {value!r}，不能改回旧材料")
         if not isinstance(evidence, dict) or evidence.keys() != materials.keys():
             raise ValueError("每项材料都须提供原文依据")
         sources = snapshot["sources"]
