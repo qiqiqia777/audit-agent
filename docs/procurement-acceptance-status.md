@@ -34,9 +34,11 @@
 | 催办及网络等待时的维护入口 | 模拟网络、实际维护线程和 SQLite；受控时钟及有序并发 | [运行验证](procurement-runtime-verification.md) |
 | 通知异常、补发与核实 | 模拟 SMTP 拒收/断连、实际页面 HTTP 路由和 SQLite | evals/deterministic/test_procurement_notifications.py |
 | 原文历史与隔离 | 实际 HTTP 路由，模拟两部门和含脚本的邮件 | evals/deterministic/test_procurement_web.py |
+| 等待、60 秒催办、重启及候选分配 | 实际 IAB 浏览器、独立演示 main 与维护线程、只读 SQLite 对照；有效 sales CSRF 的 HTTP 分配拒绝回归 | [#17 运行与浏览器验收](procurement-wait-browser-verification.md)，真实邮箱入口及人工 QA 仍待验证 |
 
-浏览器自动化工具初始化时报告运行环境路径缺失，重置及后续复查仍未恢复。
-因此 HTTP 表单结果不会写成浏览器人工走查已通过。
+早期浏览器自动化工具初始化曾报告运行环境路径缺失；部分 Windows Chrome 操作也因 URL 无法可靠识别停止。
+后续 #17 已使用 IAB 留存本轮范围的实际浏览器证据，未重试已停止的 Chrome 操作。
+该结果不覆盖其他子任务，也不将 HTTP 表单或助手浏览器走查当作用户人工 QA 通过。
 本机原文与账号仅留在被忽略的数据目录，公开文档描述脱敏样例和验证方式。
 
 用户已选择稍后手动验收浏览器。已准备 [检查清单与独立演示入口](procurement-manual-checklist.md)，待用户反馈后更新本表。
