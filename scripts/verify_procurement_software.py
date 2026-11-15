@@ -6,9 +6,10 @@ import re
 import time
 import uuid
 from pathlib import Path
+from contextlib import closing
 
 from dotenv import dotenv_values
-from imap_tools import AND, MailBox
+from imap_tools import MailBox
 from werkzeug.security import generate_password_hash
 
 from email_agent.config import AppConfig
@@ -27,6 +28,9 @@ def main():
     parser.add_argument("--env-file", required=True)
     parser.add_argument("--self-mail", action="store_true", required=True)
     parser.add_argument("--directory", type=Path, required=True)
+    parser.add_argument(
+        "--resume-inbound", action="store_true", help="复用已发出但尚未入库的第一封样例"
+    )
     args = parser.parse_args()
     cfg = AppConfig.from_env(args.env_file)
     if not cfg.imap or not cfg.smtp or cfg.imap.user.casefold() != cfg.smtp.user.casefold():
@@ -40,8 +44,11 @@ def main():
     )
     if not settings.api_key or not settings.base_url or not settings.model:
         raise SystemExit("需要 GLM 测试模型配置")
-    args.directory.mkdir(parents=True, exist_ok=False)
+    args.directory.mkdir(parents=True, exist_ok=args.resume_inbound)
     evidence = {"sample": uuid.uuid4().hex[:12], "model": settings.model}
+
+    if args.resume_inbound:
+        evidence = json.loads((args.directory / "evidence.json").read_text(encoding="utf-8"))
 
     def save(name, value):
         evidence[name] = value
@@ -57,15 +64,25 @@ def main():
     class Inbox:
         def put(self, event):
             for original_id, (subject, body) in sent_samples.items():
-                if event.metadata.get("subject") == subject and body.strip() in event.metadata.get(
-                    "email_thread", ""
-                ):
+                if event.metadata.get("subject") == subject and "\n".join(
+                    body.splitlines()
+                ).strip() in "\n".join(event.metadata.get("email_thread", "").splitlines()):
                     store.intake(event, {cfg.imap.user.casefold(): "演示部"})
                     received_ids[original_id] = event.metadata["message_id"]
                     break
 
     tag = evidence["sample"]
-    save("mail_scope", "unique subject tag and exact self-sent sample body")
+    save("mail_scope", "latest 30 UIDs, header-filtered to unique self-mail sample")
+
+    def recent(box, subject):
+        uids = sorted(box.uids(), key=int)[-30:]
+        if not uids:
+            return []
+        headers = list(box.fetch(uid_list=uids, headers_only=True, mark_seen=False, bulk=True))
+        selected = [message.uid for message in headers if subject in message.subject]
+        if not selected:
+            return []
+        return list(box.fetch(uid_list=selected, mark_seen=False, bulk=True))
 
     class SampleClient:
         """Restrict the real server search to this fictional run's unique subjects."""
@@ -80,19 +97,27 @@ def main():
             self.box.logout()
 
         def uids(self):
-            return self.box.uids(AND(subject=tag), charset="UTF-8")
+            return self.box.uids()
 
         def fetch(self, criteria, *, mark_seen=False):
-            return [
-                message
-                for message in self.box.fetch(
-                    AND(subject=tag), charset="UTF-8", mark_seen=mark_seen, reverse=True, limit=50
-                )
-                if tag in message.subject
-            ]
+            return recent(self.box, tag)
 
-    poller = ImapPoller(Inbox(), cfg.imap, args.directory, client_factory=SampleClient)
-    poller.poll_once()
+    cursor_dir = args.directory / ("resume-cursor" if args.resume_inbound else "cursor")
+    cursor_dir.mkdir(exist_ok=True)
+    poller = ImapPoller(
+        Inbox(),
+        cfg.imap,
+        cursor_dir,
+        client_factory=SampleClient,
+        fresh_window_minutes=60 if args.resume_inbound else 1,
+    )
+    if not args.resume_inbound:
+        poller.poll_once()
+    else:
+        with closing(store.connect()) as db:
+            if db.execute("SELECT count(*) FROM applications").fetchone()[0]:
+                raise ValueError("已有入库申请，请核对状态而不是重复执行")
+
     model = get_client(settings)
 
     def send(subject, body, reply=None):
@@ -153,10 +178,13 @@ def main():
         == 302
     )
     tag = evidence["sample"]
-    initial = send(
-        "软件订阅申请 " + tag,
-        f"采购对象：演示软件-{tag}\n业务用途：虚构设计演示\n席位数：5\n订阅期限：12个月\n报价：120元/月",
-    )
+    initial_subject = "软件订阅申请 " + tag
+    initial_body = f"采购对象：演示软件-{tag}\n业务用途：虚构设计演示\n席位数：5\n订阅期限：12个月\n报价：120元/月"
+    if args.resume_inbound:
+        initial = "reused-inbound"
+        sent_samples[initial] = (initial_subject, initial_body)
+    else:
+        initial = send(initial_subject, initial_body)
     ingest(initial)
     record = review()
     ident = record["id"]
@@ -179,13 +207,7 @@ def main():
             with MailBox(cfg.imap.host, port=cfg.imap.port, timeout=20).login(
                 cfg.imap.user, cfg.imap.password, initial_folder=cfg.imap.folder
             ) as box:
-                for message in box.fetch(
-                    AND(subject=f"采购申请 #{ident}"),
-                    charset="UTF-8",
-                    reverse=True,
-                    limit=50,
-                    mark_seen=False,
-                ):
+                for message in recent(box, f"采购申请 #{ident}"):
                     if (
                         expected in message.text
                         and tag in message.text
