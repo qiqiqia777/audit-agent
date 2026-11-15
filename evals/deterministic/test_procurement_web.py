@@ -64,3 +64,38 @@ def test_manager_previews_then_sends_once_for_the_reviewed_version(tmp_path):
     assert outbox[0][1] in preview.get_data(as_text=True)
     assert client.post(path, data=form).status_code == 409 and len(outbox) == 1
     assert "已发送" in client.get(path).get_data(as_text=True)
+
+
+def test_history_renders_previous_materials_and_only_authorized_mail(tmp_path):
+    store = ProcurementStore(tmp_path / "history.sqlite")
+    staff = {"design@example.test": "设计部", "sales@example.test": "销售部"}
+
+    def inbound(mid, body, sender="design@example.test", subject="软件订阅申请"):
+        return store.intake(
+            Event(
+                EventType.EMAIL_INBOUND,
+                subject,
+                {"from": sender, "message_id": mid, "subject": subject, "email_thread": body},
+            ),
+            staff,
+        )
+
+    ident = inbound(
+        "<history@test>", "采购对象：软件\n席位数：5\n业务用途：<script>alert(1)</script>"
+    )
+    inbound("<change@test>", "改成8席", subject=f"采购申请 #{ident}")
+    foreign = inbound("<foreign@test>", "采购对象：销售部私有样例", sender="sales@example.test")
+    client = create_app(
+        store, {"design": {"department": "设计部"}}, lambda row, body: None
+    ).test_client()
+    with client.session_transaction() as session:
+        session.update(manager="design", csrf="history-test")
+    response = client.get(f"/requests/{ident}")
+    assert response.status_code == 200
+    page = response.get_data(as_text=True)
+    assert "材料版本历史" in page and "版本 1" in page and "版本 2" in page
+    assert "收到的申请与补件" in page and "改成8席" in page
+    assert "<script>alert(1)</script>" not in page
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in page
+    assert "销售部私有样例" not in page
+    assert client.get(f"/requests/{foreign}").status_code == 404

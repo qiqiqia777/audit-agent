@@ -24,6 +24,15 @@ STATES = {
     "unknown": "发送结果待核实",
     "sent": "已发送",
     "failed": "通知发送失败",
+    "draft": "待确认",
+    "cancelled": "已撤销",
+}
+REVIEW_STATES = {
+    "pending": "待处理",
+    "running": "正在审查",
+    "completed": "已完成",
+    "failed": "未通过",
+    "superseded": "已被新版本替代",
 }
 
 
@@ -40,10 +49,17 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
 
     def page(title, template, **values):
         return render_template_string(
-            '<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>{{title}}</title>'
-            "<main><h1>{{title}}</h1>" + template + "</main></html>",
+            '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<title>{{title}}</title><style>body{font-family:Inter,"Microsoft Yahei",sans-serif;color:#172332;background:#f7f8fa}'
+            "main{max-width:960px;margin:2rem auto;padding:1.5rem;background:white;border-radius:12px}"
+            "h1{font-size:1.7rem}h2{font-size:1.2rem;margin-top:2rem}dt{font-weight:600;margin-top:.6rem}"
+            "button,input{font:inherit;margin:.4rem;padding:.6rem}button{cursor:pointer}button:disabled{cursor:default}"
+            "pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;background:#f2f4f7}details{margin:1rem 0}"
+            "form{padding:.6rem;border:1px solid #dce2e8;border-radius:6px;margin:1rem 0}a{color:#155a9c}"
+            "</style></head><body><main><h1>{{title}}</h1>" + template + "</main></body></html>",
             title=title,
             states=STATES,
+            review_states=REVIEW_STATES,
             decisions=DECISIONS,
             **values,
         )
@@ -197,7 +213,8 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             f"采购申请 #{ident}",
             """<a href="/">部门申请</a><p>申请人 {{r.sender}} · 版本 {{r.version}}</p>
             <dl>{% for k,label in labels.items() if k in r.materials %}<dt>{{label}}</dt><dd>{{r.materials.get(k,'待补充')}}</dd>{% endfor %}</dl>
-            {% if r.model_review %}<p>模型审查 {{r.model_review.state}} {{r.model_review.error or ''}}</p>
+            {% if r.model_review %}<p>材料审查 {{review_states.get(r.model_review.state,'待核实')}}</p>
+            {% if r.model_review.error %}<p>审查未完成，请核对材料和模型配置后重新审查。</p>{% endif %}
             {% if not r.decision and r.model_review.state in ['failed','completed'] %}<form method="post">
             <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="version" value="{{r.version}}">
             <button name="recheck">重新审查当前材料</button></form>{% endif %}{% endif %}
@@ -226,7 +243,12 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             <p>发给 {{r.sender}}：{{body}}</p><input type="hidden" name="csrf" value="{{session.csrf}}">
             <input type="hidden" name="version" value="{{r.version}}"><button name="decision" value="{{choice}}"
             {% if (choice=='approved' and r.review.questions) or (r.model_review and r.model_review.state!='completed') %}disabled{% endif %}>{{decisions[choice]}}并通知</button>
-            </form>{% endfor %}{% endif %}""",
+            </form>{% endfor %}{% endif %}
+            <h2>材料版本历史</h2>{% for v in r.versions %}<details><summary>版本 {{v.version}} · 预计总额 {{v.review.estimated_total_cny or '待核实'}} 元</summary>
+            <dl>{% for field,value in v.materials.items() %}<dt>{{labels.get(field,field)}}</dt><dd>{{value}}</dd>{% endfor %}</dl>
+            <p>制度 {{v.review.policy_version}}</p>{% if v.review.model_summary %}<p>{{v.review.model_summary}}</p>{% endif %}</details>{% endfor %}
+            <h2>收到的申请与补件</h2>{% for mail in r.mail_history %}<details><summary>邮件 {{loop.index}} · {{mail.message_id}}</summary>
+            <pre>{{mail.body}}</pre></details>{% else %}<p>此旧记录未保存邮件原文</p>{% endfor %}""",
             r=record,
             followups=store.followups(ident, dept, time.time()),
             previews={c: notice(record, c) for c in DECISIONS},
