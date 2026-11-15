@@ -2,8 +2,8 @@
 
 核对日期为 2026-11-15。此表记录阶段证据，完整验收仍在进行。
 
-#15 的 [双部门案例与缺用途 HTTP 记录](procurement-case-scope-verification.md) 已补充。
-本轮浏览器工具因无法可靠识别 URL 而停止，浏览器与人工 QA 仍待完成。
+#15 的 [双部门案例与缺用途记录](procurement-case-scope-verification.md) 已包含 HTTP 回归和实际 IAB 截图。
+该任务的受控浏览器检查已完成，用户人工 QA 和其他任务的剩余现场流程仍待完成。
 
 ## 需求与证据
 
@@ -29,6 +29,10 @@
 
 ## 关键验证记录
 
+2026-11-15：[#15 双部门案例与本次缺项](procurement-case-scope-verification.md) 已补 7 张实际
+IAB 浏览器截图，覆盖同款历史获批仍缺用途、授权原记录、空收件箱和跨部门当前/历史访问拒绝。
+该受控演示不新增真实模型或邮件证据，用户人工 QA 未反馈，#15 和父任务仍开放。
+
 | 范围 | 方法 | 结果位置 |
 | --- | --- | --- |
 | 设备完整申请到通知 | 真实 IMAP/SMTP + HTTP 审批表单 | 原测试邮箱工程 data/procurement-acceptance/ae40861e2bd3/evidence.json，公开摘要在 PR #7 |
@@ -38,8 +42,8 @@
 | 通知异常、补发与核实 | 模拟 SMTP 拒收/断连、实际页面 HTTP 路由和 SQLite | evals/deterministic/test_procurement_notifications.py |
 | 原文历史与隔离 | 实际 HTTP 路由，模拟两部门和含脚本的邮件 | evals/deterministic/test_procurement_web.py |
 
-浏览器自动化工具初始化时报告运行环境路径缺失，重置及后续复查仍未恢复。
-因此 HTTP 表单结果不会写成浏览器人工走查已通过。
+早期浏览器自动化初始化失败，相关历史记录未把 HTTP 表单结果写成浏览器通过。
+本次仅 #15 已追加上述实际 IAB 结果，不代表所有现场流程或用户人工验收已完成。
 本机原文与账号仅留在被忽略的数据目录，公开文档描述脱敏样例和验证方式。
 
 用户已选择稍后手动验收浏览器。已准备 [检查清单与独立演示入口](procurement-manual-checklist.md)，待用户反馈后更新本表。

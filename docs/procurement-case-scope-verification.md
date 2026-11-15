@@ -23,11 +23,38 @@ test_same_software_history_keeps_current_purpose_required_and_department_private
 Ruff 与运行时 skill validator 通过。11 项跳过为既有真实模型用例，当前未配置活动提供商密钥；
 judge 同样跳过，不能把 gate open 写成真实模型验收完成。
 
-## 浏览器：待验收
+## 浏览器：已补齐受控演示证据，人工 QA 待反馈
 
-本次内置浏览器首次创建标签页超时。恢复 inventory 后尝试使用现有 Edge 窗口，工具明确报告：
+早期内置浏览器首次创建标签页超时。恢复 inventory 后尝试使用现有 Edge 窗口，工具明确报告：
 无法充分确定当前 Windows 浏览器 URL 以执行策略，并停止本轮 Computer Use。
-此后停止 UI 操作；未获得页面截图或浏览器交互通过记录，不能用 HTTP 结果替代。
+当轮停止 UI 操作，没有将 HTTP 结果当作浏览器通过。
+
+2026-11-15 追加验证时，官方 IAB 已可用，页面显示完整回环 URL。
+复用原分支与基线，使用本工作树新建的 .venv（Python 3.12），核对解释器及模块导入均来自
+`A:\audit-agent-case`。没有恢复此前停止的 Windows Edge 操作，也没有绕过 URL 识别策略。
+在独立目录运行以下命令，通知只进入 SQLite 演示收件箱：
+
+```powershell
+.\.venv\Scripts\python.exe scripts/procurement_demo.py --directory data/procurement-acceptance/case-browser-20261115 --port 18115
+```
+
+实际浏览器登录、点击与导航如下，截图均为整页 JPEG，只含虚构资料及公开演示密码：
+
+| 操作 | 实际观察与截图 |
+| --- | --- |
+| design / demo-only 登录，打开 #2 | 同款「演示软件」缺用途；已明确 per_seat，预计 7200.00 元，但仍提示「请补充业务用途」，批准禁用。同部门摘要显示软件订阅、设计部历史出图、1200.00 元、批准及 #5 链接，不含销售部历史。[缺项和历史同屏](case-browser-20261115/01-purpose-still-required.jpg) |
+| 点击摘要中的 #5 | 原记录可打开，显示同款软件、设计部历史出图、1200.00 元及 demo-fixture 批准。[授权历史](case-browser-20261115/02-authorized-history.jpg) |
+| 打开本部门演示收件箱 | 为 []；本轮没有批准或确认补件发送。[空收件箱](case-browser-20261115/03-design-empty-outbox.jpg) |
+| 切换 sales / demo-only 登录 | 列表只有销售部 #4，没有设计部当前 #2 或历史 #5。[销售部列表](case-browser-20261115/04-sales-list.jpg) |
+| 用销售部会话访问先前已打开的 #2 地址 | 显示 404 Not Found。[当前申请拒绝](case-browser-20261115/05-current-denied.jpg) |
+| 用销售部会话访问先前已打开的 #5 地址 | 显示 404 Not Found。[历史原记录拒绝](case-browser-20261115/06-history-denied.jpg) |
+| 从销售部列表打开本部门 #4 | 可读销售部专用历史、2400.00 元；没有设计部案例摘要或原记录链接。[销售部自身历史](case-browser-20261115/07-sales-own-history.jpg) |
+
+禁用按钮没有通过修改 DOM 强行点击；缺项直接 POST 的 409、跨部门审批 POST 的 404、
+决定未产生及收件箱为空由原有公开 HTTP 回归重新验证，区别于上表浏览器实际操作。
+本轮先复跑演示文件 2 passed；完整 gate 再跑为 277 passed、11 live skipped，
+Ruff 和运行时 skill 校验通过；anthropic 无活动 key，judge skipped。
+本轮不新增真实模型或真实邮件投递，也不是用户人工 QA。
 
 手动复演可在新目录运行 python -m scripts.procurement_demo --directory data/procurement-acceptance/case-check-new --port 8093，
 打开 http://127.0.0.1:8093/ ，用 design / demo-only 登录。
@@ -35,4 +62,5 @@ judge 同样跳过，不能把 gate open 写成真实模型验收完成。
 确认缺项、禁用的批准按钮、本部门历史链接和原记录；切换 sales / demo-only，核对列表及直接访问拒绝。
 每轮用新目录以保留已有证据，不清空运行数据。
 
-Issue #15 保持开放，待补实际浏览器结果及人工 QA；父 #3/#4 亦保持开放。
+Issue #15 的受控浏览器缺口已补齐，仍保持开放等待用户人工 QA；父 #3/#4 亦保持开放。
+原 PR #21 继续 draft，不把新增截图当作用户验收反馈。
