@@ -16,6 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
+procurement-review = "email_agent.procurement_worker:main"
 procurement-inbox = "email_agent.procurement_mailbox:main"
 procurement-web = "email_agent.procurement_web:main"
 # Branded CLI: `minihermes dashboard`, `minihermes voice`, `minihermes` to chat, etc.

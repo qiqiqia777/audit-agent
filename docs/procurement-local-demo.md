@@ -43,6 +43,21 @@ uv pip install -e '.[dev]'
 
 负责人登录后可核对预计总额 2401.10 元和演示制度条款，预览通知，然后点击批准或驳回。数据库在 DATA_DIR/procurement/applications.sqlite。送达验收需要在收件箱核对唯一申请标记和决定正文。
 
+## 模型审查
+
+另开终端运行 `python -m email_agent.procurement_worker --env-file .env`。
+配置 MINIHERMES_PROVIDER 及对应提供商密钥。若使用邮箱工程的 GLM_API_KEY、GLM_BASE_URL、GLM_MODEL，命令添加 --glm-compat。
+模型循环复用 MiniHermes 的现有适配。
+
+收信服务先保存原邮件并生成审查任务。模型服务异步领取，页面显示状态、建议、逐字段原文和制度依据。
+本版本审查成功后才允许审批和发送补件；模型完成会更新材料版本，负责人需核对新版。
+失败任务显示错误类别，修复配置后启动服务时添加 --retry-failed。进程锁限制同一目录一个模型服务，重启后可恢复运行中的任务。
+旧记录如果没有原邮件，需先按申请编号补充材料，再生成可审查的新版。
+
+运行虚构自然语言样例的真实模型验收可使用
+`python scripts/verify_procurement_model.py --env-file .env --glm-compat --output data/procurement-acceptance/model-natural-language.json`。
+该脚本不发送邮件，脱敏结果只记录模型名、审查状态、金额及引用编号。
+
 ## 通知恢复
 
 审批决定先保存，随后记录一次独立的发送尝试。发送前已保存邮件编号，用它在邮箱或服务器记录中核对投递。审批决定保留原负责人及决定时间。

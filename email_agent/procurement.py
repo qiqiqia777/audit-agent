@@ -70,10 +70,19 @@ def equipment_fields(body: str) -> dict:
 
 
 class ProcurementStore:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, model_review=False):
+        self.model_review = model_review
         self.path = path
         with closing(self.connect()) as db:
             db.executescript("""
+                CREATE TABLE IF NOT EXISTS original_mail(
+                    mail_key TEXT PRIMARY KEY, body TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS review_jobs(
+                    id INTEGER PRIMARY KEY, application_id INTEGER NOT NULL, version INTEGER NOT NULL,
+                    state TEXT NOT NULL DEFAULT 'pending', error TEXT, result TEXT,
+                    UNIQUE(application_id,version)
+                );
                 CREATE TABLE IF NOT EXISTS applications(
                     id INTEGER PRIMARY KEY,
                     inbound_key TEXT NOT NULL UNIQUE,
@@ -172,6 +181,10 @@ class ProcurementStore:
         )
         with closing(self.connect()) as db, db:
             db.execute("BEGIN IMMEDIATE")
+            db.execute(
+                "INSERT OR IGNORE INTO original_mail VALUES(?,?)",
+                (key, meta.get("email_thread", "")),
+            )
             existing = db.execute(
                 "SELECT id FROM applications WHERE inbound_key=?", (key,)
             ).fetchone()
@@ -186,13 +199,13 @@ class ProcurementStore:
                 review = (review_subscription if category == "software" else review_equipment)(
                     materials
                 )
-                return db.execute(
+                ident = db.execute(
                     """INSERT INTO applications(inbound_key,sender,department,materials,review,category)
                     VALUES(?,?,?,?,?,?)""",
                     (key, sender, department, json.dumps(materials), json.dumps(review), category),
                 ).lastrowid
-            if not materials:
-                return None
+                self._enqueue_review(db, ident)
+                return ident
             rows = db.execute(
                 "SELECT id,inbound_key FROM applications WHERE sender=? AND department=? AND decision IS NULL ORDER BY id",
                 (sender, department),
@@ -228,8 +241,7 @@ class ProcurementStore:
                 return candidates[0]
             return None
 
-    @staticmethod
-    def _apply_change(db, key, ident, department):
+    def _apply_change(self, db, key, ident, department):
         from minihermes.ops.procurement import review_equipment, review_subscription
 
         change = db.execute(
@@ -265,6 +277,13 @@ class ProcurementStore:
                 (json.dumps(fields), json.dumps(review), ident),
             )
         db.execute("UPDATE incoming_changes SET applied_to=? WHERE mail_key=?", (ident, key))
+        if fields == json.loads(row["materials"]) and self.model_review:
+            db.execute(
+                "INSERT INTO revisions VALUES(?,?,?,?)",
+                (ident, row["version"], row["materials"], row["review"]),
+            )
+            db.execute("UPDATE applications SET version=version+1 WHERE id=?", (ident,))
+        self._enqueue_review(db, ident)
 
     def assign_change(self, key, ident, department):
         with closing(self.connect()) as db, db:
@@ -308,6 +327,16 @@ class ProcurementStore:
 
     def claim_followup(self, ident, department, draft_id):
         with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            if self.model_review:
+                ready = db.execute(
+                    """SELECT 1 FROM applications a JOIN review_jobs j
+                    ON j.application_id=a.id AND j.version=a.version
+                    WHERE a.id=? AND a.department=? AND j.state='completed'""",
+                    (ident, department),
+                ).fetchone()
+                if not ready:
+                    raise ValueError("本版本的模型审查尚未完成")
             result = db.execute(
                 """UPDATE followups SET state='unknown' WHERE id=? AND application_id=? AND state='draft'
                 AND version=(SELECT version FROM applications WHERE id=? AND department=? AND decision IS NULL)""",
@@ -372,6 +401,12 @@ class ProcurementStore:
         ]
         result["changes"] = {}
         with closing(self.connect()) as db:
+            job = db.execute(
+                "SELECT state,error FROM review_jobs WHERE application_id=? ORDER BY id DESC LIMIT 1",
+                (application_id,),
+            ).fetchone()
+        result["model_review"] = dict(job) if job else None
+        with closing(self.connect()) as db:
             result["notification_attempts"] = [
                 dict(r)
                 for r in db.execute(
@@ -419,6 +454,13 @@ class ProcurementStore:
                 raise LookupError("未找到本部门申请")
             if row["version"] != version or row["decision"]:
                 raise ValueError("申请已更新或已决定，请查看最新记录")
+            if self.model_review:
+                job = db.execute(
+                    "SELECT state FROM review_jobs WHERE application_id=? AND version=?",
+                    (application_id, version),
+                ).fetchone()
+                if not job or job["state"] != "completed":
+                    raise ValueError("本版本的模型审查尚未完成，请先核对审查结果")
             if decision == "approved" and json.loads(row["review"])["status"] != "ready_for_review":
                 raise ValueError("材料尚待补齐")
             db.execute(
@@ -433,6 +475,84 @@ class ProcurementStore:
                 (application_id, manager, row["sender"], result_notice(decided)),
             )
         return self.detail(application_id, department)
+
+    def _enqueue_review(self, db, ident):
+        if self.model_review:
+            db.execute(
+                """INSERT OR IGNORE INTO review_jobs(application_id,version)
+                SELECT id,version FROM applications WHERE id=?""",
+                (ident,),
+            )
+
+    def claim_review(self):
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            job = db.execute(
+                "SELECT * FROM review_jobs WHERE state='pending' ORDER BY id LIMIT 1"
+            ).fetchone()
+            if not job:
+                return None
+            db.execute("UPDATE review_jobs SET state='running' WHERE id=?", (job["id"],))
+            row = db.execute(
+                "SELECT * FROM applications WHERE id=?", (job["application_id"],)
+            ).fetchone()
+            if row["version"] != job["version"] or row["decision"]:
+                db.execute("UPDATE review_jobs SET state='superseded' WHERE id=?", (job["id"],))
+                return {"skip": True}
+        snapshot = self.detail(row["id"], row["department"])
+        with closing(self.connect()) as db:
+            original = db.execute(
+                "SELECT body FROM original_mail WHERE mail_key=?", (row["inbound_key"],)
+            ).fetchone()
+            changes = [
+                r[0]
+                for r in db.execute(
+                    "SELECT body FROM incoming_changes WHERE applied_to=? ORDER BY rowid",
+                    (row["id"],),
+                )
+            ]
+        snapshot["sources"] = ([original[0]] if original else []) + changes
+        return {"job": dict(job), "snapshot": snapshot}
+
+    def finish_review(self, job, result=None, error=None):
+        with closing(self.connect()) as db, db:
+            db.execute("BEGIN IMMEDIATE")
+            active = db.execute(
+                "SELECT 1 FROM review_jobs WHERE id=? AND state='running'", (job["id"],)
+            ).fetchone()
+            if not active:
+                return
+            row = db.execute(
+                "SELECT * FROM applications WHERE id=?", (job["application_id"],)
+            ).fetchone()
+            if row["version"] != job["version"] or row["decision"]:
+                state = "superseded"
+            elif error:
+                state = "failed"
+            else:
+                state = "completed"
+                db.execute(
+                    "INSERT INTO revisions VALUES(?,?,?,?)",
+                    (row["id"], row["version"], row["materials"], row["review"]),
+                )
+                db.execute(
+                    "UPDATE applications SET materials=?,review=?,version=version+1 WHERE id=?",
+                    (json.dumps(result["materials"]), json.dumps(result["review"]), row["id"]),
+                )
+                db.execute("UPDATE review_jobs SET version=version+1 WHERE id=?", (job["id"],))
+                db.execute(
+                    "UPDATE followups SET state='cancelled' WHERE application_id=? AND state='draft'",
+                    (row["id"],),
+                )
+            db.execute(
+                "UPDATE review_jobs SET state=?,result=?,error=? WHERE id=? AND state='running'",
+                (
+                    state,
+                    json.dumps(result, ensure_ascii=False) if result else None,
+                    error,
+                    job["id"],
+                ),
+            )
 
     def claim_notification(self, ident, department, manager, attempt_id):
         """Atomically claim the expected pending attempt or retry a confirmed failure."""

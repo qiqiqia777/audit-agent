@@ -184,6 +184,9 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             f"采购申请 #{ident}",
             """<a href="/">部门申请</a><p>申请人 {{r.sender}} · 版本 {{r.version}}</p>
             <dl>{% for k,label in labels.items() if k in r.materials %}<dt>{{label}}</dt><dd>{{r.materials.get(k,'待补充')}}</dd>{% endfor %}</dl>
+            {% if r.model_review %}<p>模型审查 {{r.model_review.state}} {{r.model_review.error or ''}}</p>{% endif %}
+            {% if r.review.model_summary %}<h2>模型审查建议</h2><p>{{r.review.model_summary}}</p>
+            {% for field,quote in r.review.evidence.items() %}<p>{{labels.get(field,field)}}原文依据：{{quote}}</p>{% endfor %}{% endif %}
             <p>预计总额 {{r.review.estimated_total_cny or '待核实'}} 元</p><h2>{{r.review.policy_version}}</h2>
             {% for k,v in r.review.clauses.items() %}<p>{{k}} · {{v}}</p>{% endfor %}
             {% for q in r.review.questions %}<p>{{q.question}}（{{q.clause}}）</p>{% endfor %}
@@ -206,7 +209,7 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             {% else %}{% for choice,body in previews.items() %}<form method="post">
             <p>发给 {{r.sender}}：{{body}}</p><input type="hidden" name="csrf" value="{{session.csrf}}">
             <input type="hidden" name="version" value="{{r.version}}"><button name="decision" value="{{choice}}"
-            {% if choice=='approved' and r.review.questions %}disabled{% endif %}>{{decisions[choice]}}并通知</button>
+            {% if (choice=='approved' and r.review.questions) or (r.model_review and r.model_review.state!='completed') %}disabled{% endif %}>{{decisions[choice]}}并通知</button>
             </form>{% endfor %}{% endif %}""",
             r=record,
             followups=store.followups(ident, dept, time.time()),
@@ -265,7 +268,7 @@ def main():
     directory = cfg.data_dir / "procurement"
     directory.mkdir(parents=True, exist_ok=True)
     app = create_app(
-        ProcurementStore(directory / "applications.sqlite"),
+        ProcurementStore(directory / "applications.sqlite", model_review=True),
         roster["managers"],
         smtp_delivery(cfg),
         wait_seconds=int(os.getenv("PROCUREMENT_WAIT_SECONDS", "172800")),
