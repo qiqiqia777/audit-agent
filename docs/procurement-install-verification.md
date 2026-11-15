@@ -68,10 +68,34 @@ Web 检查只使用 urllib 的 HTTP 请求，没有浏览器操作，也未登�
 第一次临时检查脚本在解码子进程输出时遇到 Windows 默认编码错误；为子进程明确加
 `-X utf8` 后重跑上述邮箱/Web 检查成功，未改产品代码。
 
+## 追加检查：wheel Web 带等待记录重启（15:02 CST）
+
+复用同一工作树、wheel-site 和解释器，在新的独立 `waiting-restart/` 数据目录执行受控检查。
+使用 wheel 内公开 `ProcurementStore.intake` 写入虚构软件申请，通过 `followups`、
+`claim_followup`、`finish_followup(..., 'sent', now, 3600)` 构造一条已发送补件记录。
+这一步直接登记模拟成功状态，没有调用 SMTP，也没有真实模型审查。
+
+随后以 `python -I -X utf8` 在两个不同子进程中先后运行 wheel 的
+`procurement_web.main`（`--roster`、`--env-file`、`--port`，同一 `DATA_DIR`），
+每次等待 `GET /login` 返回 200，再由另一个隔离 Python 进程打开 SQLite，
+调用公开 `followups` 对整条记录逐字段比较，最后停止本轮 Web 进程。
+核对模块 `__file__` 来自 wheel-site；没有把源码 editable 导入冒充 wheel 运行。
+
+两次启动和最终停止后都只有原来的同一条补件记录，版本、正文、Message-ID、
+`state=sent`、`sent_at=1794726122.9029257`、`due_at=1794729722.9029257`、
+`closed_at=null` 完全不变；截止仍为模拟发送时刻加 3600 秒，没有因 Web 重启延长。
+原始 JSON、两个 Web 日志及一次性检查脚本留在上述忽略目录下的
+`waiting-restart-evidence.json`、`waiting-web-0.log`、`waiting-web-1.log`、
+`wait_restart.py`；这些本机附件没有提交仓库，公开记录为本节摘要及方法。
+
+这只补充已安装 wheel 的 Web 进程启动对既有等待记录的保留证据。
+没有运行邮箱维护进程、等待真实 60 秒、接收补件回复或验证旧催办撤销；
+没有登录页面、浏览器操作、真实邮件和人工 QA，因此不完成 #17 或 #19 第一项。
+
 ## 未满足项与后续解除条件
 
 - #19 第一项仍未全部满足：本轮未配置真实邮箱、运行真实收信或模型工作进程；
-  Web 空库重启不等于有等待申请的服务重启验收。旧数据迁移和恢复由上述既有离线用例复跑覆盖，
+  新增受控等待记录的 Web 重启检查仍不等于邮箱/Web 整段服务重启验收。旧数据迁移和恢复由上述既有离线用例复跑覆盖，
   不是本轮真实部署迁移现场证据。
 - wheel 邮箱模块与制度数据调查已通过；本轮未发现需要产品修复的打包缺口。
 - #15–#18 的浏览器、模型表达、完整运行入口/重启和发送恢复证据仍由各子任务验收。
