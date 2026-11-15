@@ -4,6 +4,8 @@
 
 项目资料包括[产品需求](docs/08-procurement-approval-requirements.md)、[架构说明](docs/procurement-architecture.md)和[需求验收状态](docs/procurement-acceptance-status.md)。
 
+使用[独立演示入口与手动检查清单](docs/procurement-manual-checklist.md)可验证负责人页面、部门隔离、催办及通知恢复。
+
 本仓库基于 MiniHermes，为公司内部采购申请提供材料检查和制度依据。事件驱动邮箱主工程管理邮件、申请版本、负责人决定及通知。负责人可用下面的设备申请样例验证材料检查。
 
 ```python

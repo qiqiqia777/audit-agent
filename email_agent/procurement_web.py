@@ -103,7 +103,8 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             {% else %}<li>暂无申请</li>{% endfor %}</ul>{% for change in changes %}<form method="post" action="/assign">
             <h2>补件归属待确认</h2><p>{{change.sender}} · {{change.body}}</p>
             <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="key" value="{{change.mail_key}}">
-            {% for id in change.candidates %}<button name="ident" value="{{id}}">归入申请 #{{id}}</button>{% endfor %}</form>{% endfor %}""",
+            {% for id in change.candidates %}<p><a href="{{url_for('detail',ident=id)}}">查看候选申请 #{{id}}</a>
+            <button name="ident" value="{{id}}">归入申请 #{{id}}</button></p>{% endfor %}</form>{% endfor %}""",
             rows=rows,
             changes=store.pending_changes(managers[session["manager"]]["department"]),
         )
