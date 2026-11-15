@@ -1,0 +1,136 @@
+{
+  "utc": "2026-11-15T13:25:44.747340+00:00",
+  "head": "160ed92b33287bf86f137a74555a329fc78ac662",
+  "model": "glm-4.5-air",
+  "entry": "ProcurementStore.intake -> work_once -> real model tools -> deterministic calculation",
+  "real_mail": false,
+  "browser": false,
+  "samples": [
+    {
+      "name": "all-seats-short",
+      "input": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位每月120元。",
+      "review_state": "completed",
+      "error_category": null,
+      "expected_total": "1440.00",
+      "actual_total": "1440.00",
+      "expected_basis": "all_seats",
+      "actual_basis": "all_seats",
+      "cited_clauses": [
+        "SW-1",
+        "SW-2"
+      ],
+      "evidence_fields": [
+        "amount",
+        "billing_period",
+        "item",
+        "months",
+        "price_basis",
+        "purpose",
+        "seats"
+      ],
+      "passed": true,
+      "actual_materials": {
+        "item": "设计软件",
+        "purpose": "用于出图",
+        "seats": 5,
+        "months": 12,
+        "billing_period": "monthly",
+        "price_basis": "all_seats",
+        "amount": "120"
+      },
+      "evidence": {
+        "item": "设计软件",
+        "purpose": "用于出图",
+        "seats": "5个席位",
+        "months": "订阅12个月",
+        "billing_period": "每月",
+        "price_basis": "全部席位每月120元",
+        "amount": "120元"
+      }
+    },
+    {
+      "name": "all-seats-total",
+      "input": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+      "review_state": "completed",
+      "error_category": null,
+      "expected_total": "1440.00",
+      "actual_total": "1440.00",
+      "expected_basis": "all_seats",
+      "actual_basis": "all_seats",
+      "cited_clauses": [
+        "SW-1",
+        "SW-2"
+      ],
+      "evidence_fields": [
+        "amount",
+        "billing_period",
+        "item",
+        "months",
+        "price_basis",
+        "purpose",
+        "seats"
+      ],
+      "passed": true,
+      "actual_materials": {
+        "item": "设计软件",
+        "purpose": "用于出图",
+        "seats": 5,
+        "months": 12,
+        "amount": "120",
+        "billing_period": "monthly",
+        "price_basis": "all_seats"
+      },
+      "evidence": {
+        "item": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+        "purpose": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+        "seats": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+        "months": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+        "amount": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+        "billing_period": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+        "price_basis": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。"
+      }
+    },
+    {
+      "name": "per-seat-variant",
+      "input": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，每个席位每个月费用120元。",
+      "review_state": "completed",
+      "error_category": null,
+      "expected_total": "7200.00",
+      "actual_total": "36000.00",
+      "expected_basis": "per_seat",
+      "actual_basis": "per_seat",
+      "cited_clauses": [
+        "SW-1",
+        "SW-2"
+      ],
+      "evidence_fields": [
+        "amount",
+        "billing_period",
+        "item",
+        "months",
+        "price_basis",
+        "purpose",
+        "seats"
+      ],
+      "passed": false,
+      "actual_materials": {
+        "item": "设计软件",
+        "purpose": "出图",
+        "seats": 5,
+        "months": 12,
+        "billing_period": "monthly",
+        "price_basis": "per_seat",
+        "amount": "600"
+      },
+      "evidence": {
+        "item": "申请订阅设计软件",
+        "purpose": "用于出图",
+        "seats": "需要5个席位",
+        "months": "订阅12个月",
+        "billing_period": "每个月",
+        "price_basis": "每个席位",
+        "amount": "每个席位每个月费用120元"
+      }
+    }
+  ]
+}
