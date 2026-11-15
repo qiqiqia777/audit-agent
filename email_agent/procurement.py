@@ -102,7 +102,8 @@ class ProcurementStore:
                 CREATE TABLE IF NOT EXISTS followups(
                     id INTEGER PRIMARY KEY, application_id INTEGER NOT NULL, version INTEGER NOT NULL,
                     kind TEXT NOT NULL, body TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'draft',
-                    sent_at REAL, due_at REAL, message_id TEXT, UNIQUE(application_id,version,kind)
+                    sent_at REAL, due_at REAL, message_id TEXT, closed_at TEXT,
+                    UNIQUE(application_id,version,kind)
                 );
                 CREATE TABLE IF NOT EXISTS incoming_changes(
                     mail_key TEXT PRIMARY KEY, sender TEXT, department TEXT, patch TEXT,
@@ -128,13 +129,17 @@ class ProcurementStore:
                     verified_at TEXT
                 );
             """)
+            db.execute("BEGIN IMMEDIATE")
             if "category" not in {r[1] for r in db.execute("PRAGMA table_info(applications)")}:
                 db.execute(
                     "ALTER TABLE applications ADD COLUMN category TEXT NOT NULL DEFAULT 'equipment'"
                 )
-                db.commit()
+            if "closed_at" not in {r[1] for r in db.execute("PRAGMA table_info(followups)")}:
+                db.execute("ALTER TABLE followups ADD COLUMN closed_at TEXT")
+            db.commit()
             # Preserve decisions created by earlier versions, including uncertain sends.
             with db:
+                db.execute("BEGIN IMMEDIATE")
                 for row in db.execute("""SELECT * FROM applications WHERE decision IS NOT NULL
                     AND NOT EXISTS(SELECT 1 FROM notification_attempts WHERE application_id=applications.id)""").fetchall():
                     db.execute(
@@ -307,6 +312,10 @@ class ProcurementStore:
             "UPDATE followups SET state='cancelled' WHERE application_id=? AND state='draft'",
             (ident,),
         )
+        db.execute(
+            "UPDATE followups SET closed_at=CURRENT_TIMESTAMP WHERE application_id=? AND closed_at IS NULL",
+            (ident,),
+        )
         fields = json.loads(row["materials"]) | json.loads(change["patch"])
         if fields != json.loads(row["materials"]):
             review = (review_subscription if row["category"] == "software" else review_equipment)(
@@ -321,7 +330,7 @@ class ProcurementStore:
                 (json.dumps(fields), json.dumps(review), ident),
             )
         db.execute("UPDATE incoming_changes SET applied_to=? WHERE mail_key=?", (ident, key))
-        if fields == json.loads(row["materials"]) and self.model_review:
+        if fields == json.loads(row["materials"]):
             db.execute(
                 "INSERT INTO revisions VALUES(?,?,?,?)",
                 (ident, row["version"], row["materials"], row["review"]),
@@ -344,7 +353,15 @@ class ProcurementStore:
             if not row:
                 raise LookupError("未找到本部门申请")
             questions = json.loads(row["review"])["questions"]
-            if questions and not row["decision"]:
+            model_ready = (
+                not self.model_review
+                or db.execute(
+                    """SELECT 1 FROM review_jobs
+                WHERE application_id=? AND version=? AND state='completed'""",
+                    (ident, row["version"]),
+                ).fetchone()
+            )
+            if questions and not row["decision"] and model_ready:
                 request_text = (
                     f"请补充采购申请 #{ident}（{json.loads(row['materials']).get('item') or '采购事项'}）的材料："
                     + " ".join(q["question"] for q in questions)
@@ -358,7 +375,7 @@ class ProcurementStore:
 
                 draft("request", request_text)
                 due = db.execute(
-                    "SELECT 1 FROM followups WHERE application_id=? AND version=? AND kind='request' AND state='sent' AND due_at<=?",
+                    "SELECT 1 FROM followups WHERE application_id=? AND version=? AND kind='request' AND state='sent' AND closed_at IS NULL AND due_at<=?",
                     (ident, row["version"], now),
                 ).fetchone()
                 if due:
@@ -369,6 +386,19 @@ class ProcurementStore:
                     "SELECT * FROM followups WHERE application_id=? ORDER BY id", (ident,)
                 )
             ]
+
+    def materialize_due_followups(self, now):
+        """Called by the mailbox runtime even when no manager has a page open."""
+        with closing(self.connect()) as db:
+            due = db.execute(
+                """SELECT DISTINCT a.id,a.department FROM applications a JOIN followups f
+                ON f.application_id=a.id AND f.version=a.version
+                WHERE a.decision IS NULL AND f.kind='request' AND f.state='sent'
+                AND f.closed_at IS NULL AND f.due_at<=?""",
+                (now,),
+            ).fetchall()
+        for row in due:
+            self.followups(row["id"], row["department"], now)
 
     def claim_followup(self, ident, department, draft_id):
         with closing(self.connect()) as db, db:
@@ -392,6 +422,8 @@ class ProcurementStore:
             return dict(db.execute("SELECT * FROM followups WHERE id=?", (draft_id,)).fetchone())
 
     def finish_followup(self, draft_id, state, now, wait_seconds, message_id=None):
+        if state not in ("sent", "failed", "unknown") or wait_seconds <= 0:
+            raise ValueError("无效的发送结果或等待时间")
         with closing(self.connect()) as db, db:
             db.execute(
                 """UPDATE followups SET state=?,sent_at=?,due_at=?,message_id=COALESCE(?,message_id) WHERE id=? AND state='unknown'""",
@@ -516,6 +548,14 @@ class ProcurementStore:
                 (decision, manager, application_id),
             )
             decided = dict(row) | {"decision": decision}
+            db.execute(
+                "UPDATE followups SET state='cancelled',closed_at=CURRENT_TIMESTAMP WHERE application_id=? AND state='draft'",
+                (application_id,),
+            )
+            db.execute(
+                "UPDATE followups SET closed_at=CURRENT_TIMESTAMP WHERE application_id=? AND closed_at IS NULL",
+                (application_id,),
+            )
             db.execute(
                 """INSERT INTO notification_attempts
                 (application_id,actor,recipient,body,state) VALUES(?,?,?,?,'pending')""",

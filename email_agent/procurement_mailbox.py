@@ -2,6 +2,9 @@
 
 import argparse
 import json
+import logging
+import threading
+import time
 from pathlib import Path
 
 from email_agent.config import AppConfig
@@ -16,6 +19,15 @@ class ProcurementInbox:
 
     def put(self, event):
         self.store.intake(event, self.staff)
+
+
+def maintain_followups(store, stop):
+    while not stop.is_set():
+        try:
+            store.materialize_due_followups(time.time())
+        except Exception as exc:
+            logging.getLogger(__name__).error("催办检查失败：%s", type(exc).__name__)
+        stop.wait(1)
 
 
 def main(argv=None):
@@ -39,11 +51,23 @@ def main(argv=None):
     poller = ImapPoller(inbox, cfg.imap, directory, poll_interval=cfg.poll_interval_seconds)
     if args.once:
         poller.poll_once()
+        inbox.store.materialize_due_followups(time.time())
     else:
+        stop = threading.Event()
+        maintenance = threading.Thread(
+            target=maintain_followups,
+            args=(inbox.store, stop),
+            daemon=True,
+            name="procurement-followups",
+        )
+        maintenance.start()
         try:
             poller.run()
         except KeyboardInterrupt:
             poller.stop()
+        finally:
+            stop.set()
+            maintenance.join(timeout=5)
 
 
 if __name__ == "__main__":
