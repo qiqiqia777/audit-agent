@@ -46,7 +46,7 @@ def script(**changes):
     )
 
 
-def new_application(tmp_path):
+def new_application(tmp_path, body=BODY):
     store = ProcurementStore(tmp_path / "model.sqlite", model_review=True)
     staff = {"employee@example.test": "设计"}
 
@@ -65,7 +65,7 @@ def new_application(tmp_path):
             staff,
         )
 
-    ident = inbound("<natural@test>", BODY)
+    ident = inbound("<natural@test>", body)
     return store, ident, inbound
 
 
