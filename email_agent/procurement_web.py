@@ -7,6 +7,7 @@ import os
 import time
 import secrets
 import smtplib
+from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, abort, redirect, render_template_string, request, session, url_for
@@ -130,37 +131,75 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
         try:
             record = store.detail(ident, dept)
             if request.method == "POST":
+                if "verify_followup" in request.form:
+                    actual = request.form.get("sent_at", "").strip()
+                    try:
+                        sent_at = datetime.fromisoformat(actual).timestamp() if actual else None
+                    except (OSError, OverflowError) as exc:
+                        raise ValueError("请填写有效的实际发出时间") from exc
+                    store.verify_followup(
+                        ident,
+                        dept,
+                        int(request.form["verify_followup"]),
+                        int(request.form["followup_attempt"]),
+                        manager,
+                        request.form.get("delivered"),
+                        request.form.get("note", ""),
+                        time.time(),
+                        sent_at,
+                    )
+                    return redirect(url_for("detail", ident=ident))
                 if "recheck" in request.form:
                     store.request_recheck(ident, dept, int(request.form["version"]))
                     return redirect(url_for("detail", ident=ident))
                 if "followup" in request.form:
-                    draft = store.claim_followup(ident, dept, int(request.form["followup"]))
-                    receipt = {}
-                    try:
-                        receipt = (
-                            deliver(
-                                dict(
-                                    record,
-                                    mail_kind="补件",
-                                    outbound_message_id=draft["message_id"],
-                                ),
-                                draft["body"],
-                            )
-                            or {}
+                    with store.delivery_lock("followup", int(request.form["followup"])):
+                        expected = request.form.get("followup_attempt")
+                        draft = store.claim_followup(
+                            ident,
+                            dept,
+                            int(request.form["followup"]),
+                            manager,
+                            int(expected) if expected else None,
+                            wait_seconds,
                         )
-                        status = "sent"
-                    except (
-                        smtplib.SMTPResponseException,
-                        smtplib.SMTPRecipientsRefused,
-                        PermissionError,
-                    ):
-                        status = "failed"
-                    except (OSError, smtplib.SMTPException):
-                        status = "unknown"
-                    store.finish_followup(
-                        draft["id"], status, time.time(), wait_seconds, receipt.get("message_id")
-                    )
-                    return redirect(url_for("detail", ident=ident))
+                        receipt = {}
+                        try:
+                            receipt = (
+                                deliver(
+                                    dict(
+                                        record,
+                                        mail_kind="补件",
+                                        outbound_message_id=draft["message_id"],
+                                    ),
+                                    draft["body"],
+                                )
+                                or {}
+                            )
+                            status = "sent"
+                        except (
+                            smtplib.SMTPResponseException,
+                            smtplib.SMTPRecipientsRefused,
+                            PermissionError,
+                        ) as exc:
+                            receipt = {
+                                "error_type": type(exc).__name__,
+                                "smtp_code": getattr(exc, "smtp_code", None),
+                            }
+                            status = "failed"
+                        except (OSError, smtplib.SMTPException) as exc:
+                            receipt = {"error_type": type(exc).__name__}
+                            status = "unknown"
+                        store.finish_followup(
+                            draft["id"],
+                            status,
+                            time.time(),
+                            wait_seconds,
+                            receipt.get("message_id"),
+                            attempt_id=draft["attempt_id"],
+                            receipt=receipt,
+                        )
+                        return redirect(url_for("detail", ident=ident))
                 if "verify" in request.form:
                     store.verify_notification(
                         ident,
@@ -171,39 +210,41 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
                         request.form.get("note", ""),
                     )
                     return redirect(url_for("detail", ident=ident))
-                if "retry" not in request.form:
-                    choice = request.form.get("decision")
-                    record = store.decide(
-                        ident, dept, manager, int(request.form.get("version", "")), choice
-                    )
-                    attempt_id = record["notification_attempts"][-1]["id"]
-                else:
-                    attempt_id = int(request.form["attempt"])
-                attempt = store.claim_notification(ident, dept, manager, attempt_id)
-                receipt = {}
-                try:
-                    receipt = (
-                        deliver(
-                            record | {"outbound_message_id": attempt["message_id"]}, attempt["body"]
+                with store.delivery_lock("notification", ident):
+                    if "retry" not in request.form:
+                        choice = request.form.get("decision")
+                        record = store.decide(
+                            ident, dept, manager, int(request.form.get("version", "")), choice
                         )
-                        or {}
-                    )
-                    state = "sent"
-                except (
-                    smtplib.SMTPResponseException,
-                    smtplib.SMTPRecipientsRefused,
-                    PermissionError,
-                ) as exc:
-                    receipt = {
-                        "error_type": type(exc).__name__,
-                        "smtp_code": getattr(exc, "smtp_code", None),
-                    }
-                    state = "failed"
-                except (OSError, smtplib.SMTPException) as exc:
-                    receipt = {"error_type": type(exc).__name__}
-                    state = "unknown"
-                store.finish_notification(attempt["id"], state, receipt)
-                return redirect(url_for("detail", ident=ident))
+                        attempt_id = record["notification_attempts"][-1]["id"]
+                    else:
+                        attempt_id = int(request.form["attempt"])
+                    attempt = store.claim_notification(ident, dept, manager, attempt_id)
+                    receipt = {}
+                    try:
+                        receipt = (
+                            deliver(
+                                record | {"outbound_message_id": attempt["message_id"]},
+                                attempt["body"],
+                            )
+                            or {}
+                        )
+                        state = "sent"
+                    except (
+                        smtplib.SMTPResponseException,
+                        smtplib.SMTPRecipientsRefused,
+                        PermissionError,
+                    ) as exc:
+                        receipt = {
+                            "error_type": type(exc).__name__,
+                            "smtp_code": getattr(exc, "smtp_code", None),
+                        }
+                        state = "failed"
+                    except (OSError, smtplib.SMTPException) as exc:
+                        receipt = {"error_type": type(exc).__name__}
+                        state = "unknown"
+                    store.finish_notification(attempt["id"], state, receipt)
+                    return redirect(url_for("detail", ident=ident))
         except LookupError:
             abort(404)
         except ValueError as exc:
@@ -224,14 +265,28 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             <p>预计总额 {{r.review.estimated_total_cny or '待核实'}} 元</p><h2>{{r.review.policy_version}}</h2>
             {% for k,v in r.review.clauses.items() %}<p>{{k}} · {{v}}</p>{% endfor %}
             {% for q in r.review.questions %}<p>{{q.question}}（{{q.clause}}）</p>{% endfor %}
-            {% for draft in followups %}<p>{{draft.body}} · {{states.get(draft.state,draft.state)}}</p>
+            {% for draft in followups %}<p>{{draft.body}} · {{states.get(draft.state,draft.state)}} · 内容版本 {{draft.version}}</p>
+            {% for a in draft.attempts %}<p>补件发送第 {{loop.index}} 次 · {{states[a.state]}} · 记录时间 {{a.created_at}} · 发送人 {{a.actor}}</p>
+            <p>收件人 {{a.recipient}} · {{a.body}} · 邮件编号 {{a.message_id or '旧记录未保存'}}</p>
+            {% if a.verified_by %}<p>核实人 {{a.verified_by}} · {{a.verification_note}} · {{a.verified_at}}</p>{% endif %}{% endfor %}
+            {% if draft.state in ['failed','unknown'] and not draft.closed_at and draft.version==r.version and not r.decision %}
+            {% set last=draft.attempts[-1] %}<form method="post">
+            <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="followup_attempt" value="{{last.id}}">
+            {% if draft.state=='failed' %}<p>补发给 {{last.recipient}}：{{last.body}}</p>
+            <button name="followup" value="{{draft.id}}">确认补发补件</button>
+            {% else %}<h2>核实补件结果</h2><input type="hidden" name="verify_followup" value="{{draft.id}}">
+            <label>核实依据 <input name="note" required></label>
+            {% if last.wait_seconds %}<label>实际发出时间（本机时间，确认送达时必填） <input type="datetime-local" name="sent_at" step="1"></label>
+            <button name="delivered" value="yes">确认补件已送达</button>
+            {% else %}<p>旧记录未保存等待时长，不能推算原截止；如已送达，请保留待核实状态。</p>{% endif %}
+            <button name="delivered" value="no">确认补件未送达，允许补发</button>{% endif %}</form>{% endif %}
             {% if draft.state=='draft' and not r.decision %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
             <button name="followup" value="{{draft.id}}">{{'发送补件请求' if draft.kind=='request' else '确认发送催办'}}</button></form>{% endif %}{% endfor %}
             {% if r.changes %}<h2>材料变更</h2>{% for k,v in r.changes.items() %}<p>{{labels.get(k,k)}}：{{v[0]}} → {{v[1]}}</p>{% endfor %}{% endif %}
             {% if r.cases %}<h2>本部门已办结同类案例</h2>{% for c in r.cases %}<p><a href="{{url_for('detail',ident=c.id)}}">申请 #{{c.id}}</a> · {{'软件订阅' if c.category=='software' else '办公设备'}} · {{c.purpose}} · {{c.total}} 元 · {{decisions[c.decision]}}</p>{% endfor %}{% endif %}
             {% if r.decision %}<p>已{{decisions[r.decision]}} · {{r.decided_by}} · {{r.decided_at}} · {{states[r.notification_status]}}</p>
             {% set latest=r.notification_attempts[-1] %}
-            <h2>发送记录</h2>{% for a in r.notification_attempts %}<p>第 {{loop.index}} 次 · {{states[a.state]}} · {{a.created_at}}</p>
+            <h2>发送记录</h2>{% for a in r.notification_attempts %}<p>第 {{loop.index}} 次 · {{states[a.state]}} · {{a.created_at}} · 内容版本 {{r.version}} · 发送人 {{a.actor}}</p>
             <p>收件人 {{a.recipient}} · {{a.body}}</p>
             {% if a.message_id %}<p>邮件编号 {{a.message_id}}</p>{% endif %}
             {% if a.verified_by %}<p>核实人 {{a.verified_by}} · {{a.verification_note}} · {{a.verified_at}}</p>{% endif %}{% endfor %}

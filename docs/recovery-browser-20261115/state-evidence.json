@@ -1,0 +1,207 @@
+{
+  "type": "fictional browser demo, controlled refusals/disconnects, no SMTP",
+  "applications": [
+    {
+      "id": 1,
+      "version": 1,
+      "decision": "approved",
+      "decided_by": "design",
+      "decided_at": "2026-11-15 07:52:05",
+      "notification_status": "sent"
+    },
+    {
+      "id": 2,
+      "version": 1,
+      "decision": null,
+      "decided_by": null,
+      "decided_at": null,
+      "notification_status": null
+    },
+    {
+      "id": 5,
+      "version": 1,
+      "decision": null,
+      "decided_by": null,
+      "decided_at": null,
+      "notification_status": null
+    },
+    {
+      "id": 6,
+      "version": 2,
+      "decision": "approved",
+      "decided_by": "design",
+      "decided_at": "2026-11-15 07:52:20",
+      "notification_status": "sent"
+    }
+  ],
+  "followup_attempts": [
+    {
+      "id": 1,
+      "followup_id": 1,
+      "actor": "design",
+      "recipient": "employee@example.test",
+      "body": "请补充采购申请 #2（演示软件）的材料：报价是每席位价格，还是全部席位合计？",
+      "state": "failed",
+      "message_id": "<179472908012.27128.13759783196396697694@audit-agent.local>",
+      "receipt": "{\"error_type\": \"SMTPRecipientsRefused\", \"smtp_code\": null}",
+      "wait_seconds": 60.0,
+      "created_at": "2026-11-15 07:51:20",
+      "completed_at": "2026-11-15 07:51:20",
+      "verified_by": null,
+      "verification_note": null,
+      "verified_at": null,
+      "application_id": 2,
+      "version": 1,
+      "kind": "request"
+    },
+    {
+      "id": 2,
+      "followup_id": 1,
+      "actor": "design",
+      "recipient": "employee@example.test",
+      "body": "请补充采购申请 #2（演示软件）的材料：报价是每席位价格，还是全部席位合计？",
+      "state": "sent",
+      "message_id": "<demo-out-1@example.test>",
+      "receipt": "{\"message_id\": \"<demo-out-1@example.test>\", \"smtp_response\": \"local demo outbox\"}",
+      "wait_seconds": 60.0,
+      "created_at": "2026-11-15 07:51:50",
+      "completed_at": "2026-11-15 07:51:50",
+      "verified_by": null,
+      "verification_note": null,
+      "verified_at": null,
+      "application_id": 2,
+      "version": 1,
+      "kind": "request"
+    },
+    {
+      "id": 3,
+      "followup_id": 2,
+      "actor": "design",
+      "recipient": "employee@example.test",
+      "body": "请补充采购申请 #5（项目甲软件）的材料：报价是每席位价格，还是全部席位合计？",
+      "state": "failed",
+      "message_id": "<179472911148.27128.4719197343455320334@audit-agent.local>",
+      "receipt": "{\"error_type\": \"ConnectionResetError\"}",
+      "wait_seconds": 60.0,
+      "created_at": "2026-11-15 07:51:51",
+      "completed_at": "2026-11-15 07:51:51",
+      "verified_by": "design",
+      "verification_note": "受控断连：已核对本地演示收件箱，没有本次补件",
+      "verified_at": "2026-11-15 07:52:03",
+      "application_id": 5,
+      "version": 1,
+      "kind": "request"
+    },
+    {
+      "id": 4,
+      "followup_id": 2,
+      "actor": "design",
+      "recipient": "employee@example.test",
+      "body": "请补充采购申请 #5（项目甲软件）的材料：报价是每席位价格，还是全部席位合计？",
+      "state": "sent",
+      "message_id": "<demo-out-2@example.test>",
+      "receipt": "{\"message_id\": \"<demo-out-2@example.test>\", \"smtp_response\": \"local demo outbox\"}",
+      "wait_seconds": 60.0,
+      "created_at": "2026-11-15 07:52:04",
+      "completed_at": "2026-11-15 07:52:04",
+      "verified_by": null,
+      "verification_note": null,
+      "verified_at": null,
+      "application_id": 5,
+      "version": 1,
+      "kind": "request"
+    }
+  ],
+  "notification_attempts": [
+    {
+      "id": 3,
+      "application_id": 1,
+      "actor": "design",
+      "recipient": "employee@example.test",
+      "body": "您的采购申请 #1（演示显示器）已批准。",
+      "state": "failed",
+      "created_at": "2026-11-15 07:52:05",
+      "completed_at": "2026-11-15 07:52:05",
+      "message_id": "<179472912507.27128.13509270521862768695@audit-agent.local>",
+      "receipt": "{\"error_type\": \"SMTPRecipientsRefused\", \"smtp_code\": null}",
+      "verified_by": null,
+      "verification_note": null,
+      "verified_at": null
+    },
+    {
+      "id": 4,
+      "application_id": 1,
+      "actor": "design",
+      "recipient": "employee@example.test",
+      "body": "您的采购申请 #1（演示显示器）已批准。",
+      "state": "sent",
+      "created_at": "2026-11-15 07:52:19",
+      "completed_at": "2026-11-15 07:52:19",
+      "message_id": "<demo-out-3@example.test>",
+      "receipt": "{\"message_id\": \"<demo-out-3@example.test>\", \"smtp_response\": \"local demo outbox\"}",
+      "verified_by": null,
+      "verification_note": null,
+      "verified_at": null
+    },
+    {
+      "id": 5,
+      "application_id": 6,
+      "actor": "design",
+      "recipient": "employee@example.test",
+      "body": "您的采购申请 #6（项目乙软件）已批准。",
+      "state": "failed",
+      "created_at": "2026-11-15 07:52:20",
+      "completed_at": "2026-11-15 07:52:20",
+      "message_id": "<179472914058.27128.855608800125601456@audit-agent.local>",
+      "receipt": "{\"error_type\": \"ConnectionResetError\"}",
+      "verified_by": "design",
+      "verification_note": "受控断连：已检查本地演示收件箱，通知未存入",
+      "verified_at": "2026-11-15 07:52:33"
+    },
+    {
+      "id": 6,
+      "application_id": 6,
+      "actor": "design",
+      "recipient": "employee@example.test",
+      "body": "您的采购申请 #6（项目乙软件）已批准。",
+      "state": "sent",
+      "created_at": "2026-11-15 07:52:33",
+      "completed_at": "2026-11-15 07:52:33",
+      "message_id": "<demo-out-4@example.test>",
+      "receipt": "{\"message_id\": \"<demo-out-4@example.test>\", \"smtp_response\": \"local demo outbox\"}",
+      "verified_by": null,
+      "verification_note": null,
+      "verified_at": null
+    }
+  ],
+  "outbox": [
+    {
+      "id": 1,
+      "application_id": 2,
+      "department": "设计部",
+      "recipient": "employee@example.test",
+      "body": "请补充采购申请 #2（演示软件）的材料：报价是每席位价格，还是全部席位合计？"
+    },
+    {
+      "id": 2,
+      "application_id": 5,
+      "department": "设计部",
+      "recipient": "employee@example.test",
+      "body": "请补充采购申请 #5（项目甲软件）的材料：报价是每席位价格，还是全部席位合计？"
+    },
+    {
+      "id": 3,
+      "application_id": 1,
+      "department": "设计部",
+      "recipient": "employee@example.test",
+      "body": "您的采购申请 #1（演示显示器）已批准。"
+    },
+    {
+      "id": 4,
+      "application_id": 6,
+      "department": "设计部",
+      "recipient": "employee@example.test",
+      "body": "您的采购申请 #6（项目乙软件）已批准。"
+    }
+  ]
+}
