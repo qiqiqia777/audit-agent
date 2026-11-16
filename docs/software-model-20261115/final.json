@@ -1,0 +1,92 @@
+[
+  {
+    "input": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位每月120元。",
+    "model": "glm-4.5-air",
+    "state": "completed",
+    "materials": {
+      "item": "设计软件",
+      "purpose": "出图",
+      "seats": 5,
+      "months": 12,
+      "amount": "120",
+      "billing_period": "monthly",
+      "price_basis": "all_seats"
+    },
+    "evidence": {
+      "item": "设计软件",
+      "purpose": "出图",
+      "seats": "5个席位",
+      "months": "12个月",
+      "amount": "全部席位每月120元",
+      "billing_period": "每月",
+      "price_basis": "全部席位"
+    },
+    "clauses": [
+      "SW-1",
+      "SW-2"
+    ],
+    "expected_total": "1440.00",
+    "actual_total": "1440.00",
+    "passed": true
+  },
+  {
+    "input": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+    "model": "glm-4.5-air",
+    "state": "completed",
+    "materials": {
+      "item": "设计软件",
+      "purpose": "用于出图",
+      "seats": 5,
+      "months": 12,
+      "amount": "120",
+      "billing_period": "monthly",
+      "price_basis": "all_seats"
+    },
+    "evidence": {
+      "item": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+      "purpose": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+      "seats": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+      "months": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+      "amount": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+      "billing_period": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。",
+      "price_basis": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，全部席位合计每月120元。"
+    },
+    "clauses": [
+      "SW-1",
+      "SW-2"
+    ],
+    "expected_total": "1440.00",
+    "actual_total": "1440.00",
+    "passed": true
+  },
+  {
+    "input": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，每个席位每个月费用120元。",
+    "model": "glm-4.5-air",
+    "state": "completed",
+    "materials": {
+      "item": "设计软件",
+      "purpose": "出图",
+      "seats": 5,
+      "months": 12,
+      "amount": "120",
+      "billing_period": "monthly",
+      "price_basis": "per_seat"
+    },
+    "evidence": {
+      "item": "设计软件",
+      "purpose": "出图",
+      "seats": "5个席位",
+      "months": "12个月",
+      "amount": "每个席位每个月费用120元",
+      "billing_period": "每个月",
+      "price_basis": "每个席位每个月费用120元"
+    },
+    "clauses": [
+      "SW-1",
+      "SW-2"
+    ],
+    "expected_total": "7200.00",
+    "actual_total": "7200.00",
+    "passed": true
+  }
+]
