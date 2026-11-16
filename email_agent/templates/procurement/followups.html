@@ -1,0 +1,18 @@
+{% for draft in followups %}<h3>{{'补件请求' if draft.kind=='request' else '催办草稿'}} · v{{draft.version}}</h3>
+{% if draft.sent_at %}<p class="text-secondary">成功发送 {{draft.sent_at|local_time}}{% if draft.due_at %}<br>原等待截止 {{draft.due_at|local_time}}{% endif %}{% if draft.closed_at %}<br>本轮等待已结束{% endif %}</p>{% endif %}<p>{{draft.body}} · {{states.get(draft.state,draft.state)}} · 内容版本 {{draft.version}}</p>
+            {% for a in draft.attempts %}<p>补件发送第 {{loop.index}} 次 · {{states[a.state]}} · 记录时间 {{a.created_at|local_time}} · 记录归属者 {{a.actor if a.actor!='migration' else '未记录'}}</p>
+            <p>收件人 {{a.recipient}} · {{a.body}} · 邮件编号 {{a.message_id or '旧记录未保存'}}</p>
+            {% if a.actor=='migration' %}<p>历史记录迁入：{% if draft.sent_at is not none %}原操作者未记录，原发送时间见补件记录。{% else %}原发送时间与操作者未记录。{% endif %}记录时间为迁入时刻。</p>{% elif not a.message_id %}<p>尚未形成可核对的出站邮件编号；记录时间不代表实际发送时间。</p>{% endif %}{% if a.verified_by %}<p>核实人 {{a.verified_by}} · {{a.verification_note}} · {{a.verified_at|local_time}}</p>{% endif %}{% endfor %}
+            {% if draft.state in ['failed','unknown'] and not draft.closed_at and draft.version==r.version and not r.decision %}
+            {% set last=draft.attempts[-1] %}<form method="post">
+            <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="followup_attempt" value="{{last.id}}">
+            {% if draft.state=='failed' %}<p>补发给 {{last.recipient}}：{{last.body}}</p>
+            <button name="followup" value="{{draft.id}}">确认补发补件</button>
+            {% else %}<h2>核实补件结果</h2><input type="hidden" name="verify_followup" value="{{draft.id}}">
+            <label>核实依据 <input name="note" required></label>
+            {% if last.wait_seconds %}<label>实际发出时间（本机时间，确认送达时必填） <input type="datetime-local" name="sent_at" step="1"></label>
+            <button name="delivered" value="yes">确认补件已送达</button>
+            {% else %}<p>旧记录未保存等待时长，不能推算原截止；如已送达，请保留待核实状态。</p>{% endif %}
+            <button name="delivered" value="no">确认补件未送达，允许补发</button>{% endif %}</form>{% endif %}
+            {% if draft.state=='draft' and not r.decision %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
+            <button name="followup" value="{{draft.id}}">{{'发送补件请求' if draft.kind=='request' else '确认发送催办'}}</button></form>{% endif %}{% endfor %}

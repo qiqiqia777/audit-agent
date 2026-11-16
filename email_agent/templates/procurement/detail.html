@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{r.materials.get('item', '采购申请')}} · {{title}}</title>
+<link rel="stylesheet" href="{{url_for('static',filename='procurement/tabler-1.7.5.min.css.gz')}}">
+<link rel="stylesheet" href="{{url_for('static',filename='procurement/detail.css')}}">
+</head><body>
+<a class="skip-link" href="#request-summary">跳转到申请详情</a>
+<aside class="app-sidebar" aria-label="采购导航">
+  <a class="brand" href="{{url_for('inbox')}}"><span class="brand-mark">采</span><span>采购审批<span class="brand-subtitle">PROCUREMENT</span></span></a>
+  <div class="sidebar-caption">部门采购</div>
+  <a class="sidebar-link" href="{{url_for('inbox')}}">申请列表</a>
+  <span class="sidebar-link active" aria-current="page">申请详情</span>
+  <div class="sidebar-footer"><strong>{{department}}</strong><br>负责人 · {{session.manager}}</div>
+</aside>
+<div class="app-content">
+<header class="app-topbar"><span>采购管理 / <a href="{{url_for('inbox')}}">部门申请</a> / #{{r.id}}</span><span>{{department}} · {{session.manager}}</span></header>
+<main class="detail-container">
+<header class="request-hero" id="request-summary">
+  <div><div class="eyebrow">{{'软件订阅' if r.category=='software' else '办公设备'}} · 申请 #{{r.id}}</div>
+  <h1>{{r.materials.get('item') or '采购事项待补充'}}</h1>
+  <p class="text-secondary mb-3">{{r.materials.get('purpose') or '业务用途待补充'}}</p>
+  <div class="status-line"><span class="status-label">审批</span><span class="status-pill {{r.decision or 'pending'}}">{{'已'+decisions[r.decision] if r.decision else '待审批'}}</span>
+  <span class="status-label">结果邮件</span><span class="status-pill {{r.notification_status or 'none'}}">{{'结果邮件待核实' if r.notification_status=='unknown' else states.get(r.notification_status,'尚未生成')}}</span>
+  {% if r.model_review %}<span class="status-label">材料审查</span><span class="status-pill {{r.model_review.state}}">{{review_states.get(r.model_review.state,'待核实')}}</span>{% endif %}</div>
+  <div class="hero-meta"><span>申请人 {{r.sender}}</span><span>材料版本 <strong>v{{r.version}}</strong></span></div></div>
+  <div class="amount-panel"><div class="eyebrow">预计总额 · CNY</div>
+    <div class="amount">{{'¥ '+r.review.estimated_total_cny if r.review.estimated_total_cny else '待澄清'}}</div>
+    {% if r.materials.get('amount') %}<p>原始报价 ¥ {{r.materials.amount}}</p>{% endif %}
+    {% if r.category=='software' %}<p>{{r.materials.get('seats','待确认')}} 席 · {{r.materials.get('months','待确认')}} 个月<br>{{{'per_seat':'每席位','all_seats':'全部席位'}.get(r.materials.get('price_basis'),'报价范围待确认')}} / {{{'monthly':'月','quarterly':'季度','yearly':'年'}.get(r.materials.get('billing_period'),'周期待确认')}}</p>{% endif %}
+  </div>
+</header>
+<nav class="section-nav" aria-label="详情分区"><a href="#review-evidence">审查建议与依据</a><a href="#original-materials">申请资料</a><a href="#processing-history">处理记录</a><a href="#sending-records">审批与发送</a></nav>
+<div class="detail-grid"><div class="primary-column">
+<section class="card" id="review-evidence" aria-labelledby="review-title"><div class="card-header"><div><div class="eyebrow">REVIEW & EVIDENCE</div><h2 id="review-title" class="card-title">Agent 建议与制度依据</h2></div><span class="status-pill">{{r.review.policy_version}}</span></div><div class="card-body">
+  {% if r.model_review and r.model_review.error %}<div class="notice warning">审查未完成，请核对材料和模型配置后重新审查。当前不能据此批准。</div>{% endif %}
+  <p class="review-summary">{{r.review.model_summary or '以下为当前材料检查结果；尚无模型审查摘要。'}}</p>
+  {% if r.review.questions %}<div class="notice warning"><strong>决定前需要核对</strong><ul>{% for q in r.review.questions %}<li>{{q.question}} <span class="clause-label">{{q.clause}}</span></li>{% endfor %}</ul></div>{% else %}<div class="notice success">当前检查未发现缺项。审批决定仍由负责人确认。</div>{% endif %}
+  <h3>引用的制度条款</h3><div class="policy-list">{% for id,clause in r.review.clauses.items() %}{% if not required_clause_ids or id in required_clause_ids %}<div class="policy-row"><span class="clause-label">{{id}}</span><p>{{clause}}</p></div>{% endif %}{% endfor %}</div>
+  {% if r.review.evidence %}<details class="evidence-details" open><summary>逐字段原文依据</summary>{% for field,quote in r.review.evidence.items() %}<div class="evidence-row"><strong>{{labels.get(field,field)}}</strong><blockquote>{{quote}}</blockquote></div>{% endfor %}</details>{% endif %}
+  {% if r.model_review and not r.decision and r.model_review.state in ['failed','completed'] %}<form method="post" class="recheck-form"><input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="version" value="{{r.version}}"><button class="btn btn-outline-primary" name="recheck">重新审查当前材料</button></form>{% endif %}
+</div></section>
+<section class="card" id="original-materials" aria-labelledby="materials-title"><div class="card-header"><h2 class="card-title" id="materials-title">申请资料与原始邮件</h2><span class="text-secondary">当前 v{{r.version}}</span></div><div class="card-body">
+<dl class="material-grid">{% for key,label in labels.items() if key in r.materials %}<div><dt>{{label}}</dt><dd>{{{'per_seat':'每席位','all_seats':'全部席位','monthly':'每月','quarterly':'每季度','yearly':'每年','unit':'单价','total':'总价'}.get(r.materials[key],r.materials[key])}}</dd></div>{% endfor %}</dl>
+<h3>收到的申请与补件</h3>{% for mail in r.mail_history %}<details><summary>邮件 {{loop.index}} · {{mail.message_id}}</summary><pre>{{mail.body}}</pre></details>{% else %}<p class="text-secondary">此旧记录未保存邮件原文</p>{% endfor %}
+</div></section>
+{% if r.changes %}<section class="card"><div class="card-header"><h2 class="card-title">材料变更</h2><span class="status-pill pending">请核对新版</span></div><div class="card-body"><dl>{% for key,values in r.changes.items() %}<div class="change-row"><dt>{{labels.get(key,key)}}</dt><dd><span class="old-value">{{values[0]}}</span> → <strong>{{values[1]}}</strong></dd></div>{% endfor %}</dl></div></section>{% endif %}
+{% if r.cases %}<section class="card"><div class="card-header"><h2 class="card-title">本部门已办结同类案例</h2></div><div class="card-body"><p class="text-secondary">历史仅作参考，不豁免本次材料要求。</p>{% for c in r.cases %}<div class="case-row"><p><a href="{{url_for('detail',ident=c.id)}}">申请 #{{c.id}}</a> · {{'软件订阅' if c.category=='software' else '办公设备'}} · {{c.purpose}} · {{c.total or '待核实'}} 元 · {{decisions[c.decision]}}</p></div>{% endfor %}</div></section>{% endif %}
+<section class="card" id="processing-history" aria-labelledby="history-title"><div class="card-header"><h2 class="card-title" id="history-title">处理记录</h2><span class="text-secondary">北京时间</span></div><div class="card-body">
+<ol class="processing-timeline">{% for event in timeline %}<li><span class="timeline-dot"></span><time>{{event.at|local_time}}</time><strong>{{event.title}}</strong><p>{{event.actor or '未记录操作者'}} · {{'版本 '+event.version|string if event.version else '历史版本未单独记录'}}</p><p>{{event.note}}</p></li>{% else %}<li class="empty-history">尚无审批或发送操作记录。</li>{% endfor %}</ol>
+<h3>材料版本历史</h3><p class="text-secondary">以下快照按版本排列；旧数据未保存每次变更的时间与操作者。</p>{% for v in r.versions %}<details><summary>版本 {{v.version}} · 预计总额 {{v.review.estimated_total_cny or '待核实'}} 元</summary><dl class="material-grid">{% for field,value in v.materials.items() %}<div><dt>{{labels.get(field,field)}}</dt><dd>{{value}}</dd></div>{% endfor %}</dl><p>制度 {{v.review.policy_version}}</p>{% if v.review.model_summary %}<p>{{v.review.model_summary}}</p>{% endif %}</details>{% endfor %}
+</div></section>
+</div><aside class="action-column" aria-label="负责人操作">
+<section class="card" id="sending-records"><div class="card-header"><h2 class="card-title">审批与结果通知</h2></div><div class="card-body"><p class="text-secondary">核对当前材料 v{{r.version}} 后操作。确认通知会真实发给当前申请人。</p>{% include 'procurement/decision.html' %}</div></section>
+<section class="card"><div class="card-header"><h2 class="card-title">补件与催办</h2></div><div class="card-body">{% if followups %}{% include 'procurement/followups.html' %}{% else %}<p class="text-secondary">当前没有补件或催办草稿。</p>{% endif %}</div></section>
+</aside></div>
+<footer class="detail-footer">审批决定与邮件投递分别留痕 · 所有操作限定当前部门</footer>
+</main></div></body></html>

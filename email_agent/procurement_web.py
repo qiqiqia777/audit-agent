@@ -10,11 +10,12 @@ import smtplib
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, abort, redirect, render_template_string, request, session, url_for
+from flask import Flask, abort, redirect, render_template, render_template_string, request, session, url_for
 from werkzeug.security import check_password_hash
 
 from email_agent.config import AppConfig
 from email_agent.procurement import ProcurementStore, result_notice
+from email_agent.procurement_presentation import history_events, local_time
 from email_agent.sending.smtp import send_email
 from email_agent.sending.whitelist import is_allowed
 
@@ -45,6 +46,7 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
     if wait_seconds <= 0:
         raise ValueError("补件等待时间须为正数")
     app = Flask(__name__)
+    app.jinja_env.filters["local_time"] = local_time
     app.secret_key = secrets.token_bytes(32)
     app.config.update(SESSION_COOKIE_SAMESITE="Strict", MAX_CONTENT_LENGTH=8192)
 
@@ -251,62 +253,19 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             return page(
                 "申请需要重新核对", '<p>{{reason}}</p><a href="">查看最新申请</a>', reason=str(exc)
             ), 409
-        return page(
-            f"采购申请 #{ident}",
-            """<a href="/">部门申请</a><p>申请人 {{r.sender}} · 版本 {{r.version}}</p>
-            <dl>{% for k,label in labels.items() if k in r.materials %}<dt>{{label}}</dt><dd>{{r.materials.get(k,'待补充')}}</dd>{% endfor %}</dl>
-            {% if r.model_review %}<p>材料审查 {{review_states.get(r.model_review.state,'待核实')}}</p>
-            {% if r.model_review.error %}<p>审查未完成，请核对材料和模型配置后重新审查。</p>{% endif %}
-            {% if not r.decision and r.model_review.state in ['failed','completed'] %}<form method="post">
-            <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="version" value="{{r.version}}">
-            <button name="recheck">重新审查当前材料</button></form>{% endif %}{% endif %}
-            {% if r.review.model_summary %}<h2>模型审查建议</h2><p>{{r.review.model_summary}}</p>
-            {% for field,quote in r.review.evidence.items() %}<p>{{labels.get(field,field)}}原文依据：{{quote}}</p>{% endfor %}{% endif %}
-            <p>预计总额 {{r.review.estimated_total_cny or '待核实'}} 元</p><h2>{{r.review.policy_version}}</h2>
-            {% for k,v in r.review.clauses.items() %}<p>{{k}} · {{v}}</p>{% endfor %}
-            {% for q in r.review.questions %}<p>{{q.question}}（{{q.clause}}）</p>{% endfor %}
-            {% for draft in followups %}<p>{{draft.body}} · {{states.get(draft.state,draft.state)}} · 内容版本 {{draft.version}}</p>
-            {% for a in draft.attempts %}<p>补件发送第 {{loop.index}} 次 · {{states[a.state]}} · 记录时间 {{a.created_at}} · 发送人 {{a.actor}}</p>
-            <p>收件人 {{a.recipient}} · {{a.body}} · 邮件编号 {{a.message_id or '旧记录未保存'}}</p>
-            {% if a.verified_by %}<p>核实人 {{a.verified_by}} · {{a.verification_note}} · {{a.verified_at}}</p>{% endif %}{% endfor %}
-            {% if draft.state in ['failed','unknown'] and not draft.closed_at and draft.version==r.version and not r.decision %}
-            {% set last=draft.attempts[-1] %}<form method="post">
-            <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="followup_attempt" value="{{last.id}}">
-            {% if draft.state=='failed' %}<p>补发给 {{last.recipient}}：{{last.body}}</p>
-            <button name="followup" value="{{draft.id}}">确认补发补件</button>
-            {% else %}<h2>核实补件结果</h2><input type="hidden" name="verify_followup" value="{{draft.id}}">
-            <label>核实依据 <input name="note" required></label>
-            {% if last.wait_seconds %}<label>实际发出时间（本机时间，确认送达时必填） <input type="datetime-local" name="sent_at" step="1"></label>
-            <button name="delivered" value="yes">确认补件已送达</button>
-            {% else %}<p>旧记录未保存等待时长，不能推算原截止；如已送达，请保留待核实状态。</p>{% endif %}
-            <button name="delivered" value="no">确认补件未送达，允许补发</button>{% endif %}</form>{% endif %}
-            {% if draft.state=='draft' and not r.decision %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
-            <button name="followup" value="{{draft.id}}">{{'发送补件请求' if draft.kind=='request' else '确认发送催办'}}</button></form>{% endif %}{% endfor %}
-            {% if r.changes %}<h2>材料变更</h2>{% for k,v in r.changes.items() %}<p>{{labels.get(k,k)}}：{{v[0]}} → {{v[1]}}</p>{% endfor %}{% endif %}
-            {% if r.cases %}<h2>本部门已办结同类案例</h2>{% for c in r.cases %}<p><a href="{{url_for('detail',ident=c.id)}}">申请 #{{c.id}}</a> · {{'软件订阅' if c.category=='software' else '办公设备'}} · {{c.purpose}} · {{c.total}} 元 · {{decisions[c.decision]}}</p>{% endfor %}{% endif %}
-            {% if r.decision %}<p>已{{decisions[r.decision]}} · {{r.decided_by}} · {{r.decided_at}} · {{states[r.notification_status]}}</p>
-            {% set latest=r.notification_attempts[-1] %}
-            <h2>发送记录</h2>{% for a in r.notification_attempts %}<p>第 {{loop.index}} 次 · {{states[a.state]}} · {{a.created_at}} · 内容版本 {{r.version}} · 发送人 {{a.actor}}</p>
-            <p>收件人 {{a.recipient}} · {{a.body}}</p>
-            {% if a.message_id %}<p>邮件编号 {{a.message_id}}</p>{% endif %}
-            {% if a.verified_by %}<p>核实人 {{a.verified_by}} · {{a.verification_note}} · {{a.verified_at}}</p>{% endif %}{% endfor %}
-            {% if latest.state in ['failed','pending'] %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
-            <input type="hidden" name="attempt" value="{{latest.id}}"><p>发送内容：{{latest.body}}</p><button name="retry">确认补发通知</button></form>
-            {% elif latest.state=='unknown' %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
-            <input type="hidden" name="attempt" value="{{latest.id}}"><label>请先核对邮箱与发送记录，填写依据 <input name="note" required></label>
-            <button name="verify" value="yes">确认已送达</button><button name="verify" value="no">确认未送达，允许补发</button></form>{% endif %}
-            {% else %}{% for choice,body in previews.items() %}<form method="post">
-            <p>发给 {{r.sender}}：{{body}}</p><input type="hidden" name="csrf" value="{{session.csrf}}">
-            <input type="hidden" name="version" value="{{r.version}}"><button name="decision" value="{{choice}}"
-            {% if (choice=='approved' and r.review.questions) or (r.model_review and r.model_review.state!='completed') %}disabled{% endif %}>{{decisions[choice]}}并通知</button>
-            </form>{% endfor %}{% endif %}
-            <h2>材料版本历史</h2>{% for v in r.versions %}<details><summary>版本 {{v.version}} · 预计总额 {{v.review.estimated_total_cny or '待核实'}} 元</summary>
-            <dl>{% for field,value in v.materials.items() %}<dt>{{labels.get(field,field)}}</dt><dd>{{value}}</dd>{% endfor %}</dl>
-            <p>制度 {{v.review.policy_version}}</p>{% if v.review.model_summary %}<p>{{v.review.model_summary}}</p>{% endif %}</details>{% endfor %}
-            <h2>收到的申请与补件</h2>{% for mail in r.mail_history %}<details><summary>邮件 {{loop.index}} · {{mail.message_id}}</summary>
-            <pre>{{mail.body}}</pre></details>{% else %}<p>此旧记录未保存邮件原文</p>{% endfor %}""",
+        followups = store.followups(ident, dept, time.time())
+        return render_template(
+            "procurement/detail.html",
+            title=f"采购申请 #{ident}",
+            states=STATES,
+            review_states=REVIEW_STATES,
+            decisions=DECISIONS,
+            department=dept,
+            timeline=history_events(record, followups),
+            required_clause_ids=set(record["review"].get("cited_clause_ids", []))
+            | {question["clause"] for question in record["review"]["questions"]},
             r=record,
-            followups=store.followups(ident, dept, time.time()),
+            followups=followups,
             previews={c: notice(record, c) for c in DECISIONS},
             labels={
                 "item": "采购对象",
