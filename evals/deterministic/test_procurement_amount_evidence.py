@@ -130,3 +130,34 @@ def test_missing_tool_submission_gets_feedback_within_original_iteration_budget(
     assert len(requests) == budget
     assert record["model_review"]["state"] == ("completed" if budget == 4 else "failed")
     assert record["review"]["estimated_total_cny"] == ("7200.00" if budget == 4 else None)
+
+
+@pytest.mark.parametrize("label", ["报价", "预计费用"])
+@pytest.mark.parametrize("quote_form", ["label", "body"])
+def test_labelled_amount_without_currency_can_be_verified(tmp_path, label, quote_form):
+    body = f"采购对象：设计软件\n业务用途：出图\n席位数：5\n期限（月）：12\n{label}：120\n计费周期：monthly"
+    store, ident, _ = new_application(tmp_path, body)
+    materials = {k: v for k, v in MATERIALS.items() if k != "price_basis"}
+    quote = f"{label}：120" if quote_form == "label" else body
+    evidence = {key: body for key in materials} | {"amount": quote}
+    assert work_once(store, script(materials=materials, evidence=evidence), "offline-test")
+    record = store.detail(ident, "设计")
+    assert record["model_review"]["state"] == "completed"
+    assert record["materials"]["amount"] == "120"
+    assert record["review"]["estimated_total_cny"] is None
+    with pytest.raises(ValueError):
+        store.decide(ident, "设计", "manager", record["version"], "approved")
+
+
+@pytest.mark.parametrize("raw,amount,quote", [
+    ("1200", "120", "报价：120"),
+    ("120.123", "120.12", "报价：120.12"),
+    ("-120", "120", "报价：-120"),
+    ("120", "600", "报价：120"),
+])
+def test_labelled_amount_does_not_accept_partial_or_invented_prices(tmp_path, raw, amount, quote):
+    body = f"采购对象：设计软件\n席位数：5\n期限（月）：12\n报价：{raw}"
+    store, ident, _ = new_application(tmp_path, body)
+    evidence = {key: body for key in MATERIALS} | {"amount": quote}
+    assert work_once(store, script(materials=MATERIALS | {"amount": amount}, evidence=evidence), "offline-test")
+    assert store.detail(ident, "设计")["model_review"]["state"] == "failed"

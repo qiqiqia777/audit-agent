@@ -156,3 +156,34 @@ def test_manual_demo_supports_confirmation_recovery_and_department_isolation(tmp
         for ident, materials in before.items()
         if ident != selected
     )
+
+
+def test_other_department_cannot_assign_pending_change_with_valid_csrf(tmp_path):
+    app, store = create_demo(tmp_path)
+    client = app.test_client()
+
+    def login(user):
+        page = client.get("/login").get_data(as_text=True)
+        token = re.search('name="csrf" value="([^"]+)"', page)[1]
+        assert client.post(
+            "/login", data={"csrf": token, "user": user, "password": "demo-only"}
+        ).status_code == 302
+        with client.session_transaction() as session:
+            return session["csrf"]
+
+    token = login("design")
+    before = {r["id"]: store.detail(r["id"], "设计部") for r in store.inbox("设计部")}
+    assert client.post(
+        "/demo/reply", data={"csrf": token, "ident": "", "body": "改成9席"}
+    ).status_code == 302
+    (change,) = store.pending_changes("设计部")
+    assert len(change["candidates"]) >= 2
+
+    token = login("sales")
+    assert "补件归属待确认" not in client.get("/").get_data(as_text=True)
+    assert client.post(
+        "/assign",
+        data={"csrf": token, "key": change["mail_key"], "ident": change["candidates"][0]},
+    ).status_code == 404
+    assert store.pending_changes("设计部") == [change]
+    assert all(store.detail(ident, "设计部") == record for ident, record in before.items())

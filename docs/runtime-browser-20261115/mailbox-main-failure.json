@@ -1,0 +1,42 @@
+{
+  "sample": "a1d9f317dcac",
+  "folder": "audit-agent-17-a1d9f317dcac",
+  "source_head": "112a486242f93cf699bcf4ce6aa9b3492db6c17d",
+  "first_pid": 3584,
+  "inbound_application_ids": {
+    "A": 1,
+    "B": 2
+  },
+  "initial_model_states": {
+    "1": {
+      "state": "failed",
+      "error": "ValueError"
+    },
+    "2": {
+      "state": "completed",
+      "error": null
+    }
+  },
+  "failure": {
+    "category": "AssertionError",
+    "step": "initial_model_states"
+  },
+  "diagnostic": {
+    "acceptance_retry": false,
+    "stored_job_unchanged": "failed",
+    "calls": 4,
+    "tools": [
+      "read_request",
+      "read_policy",
+      "search_cases"
+    ],
+    "last_response": "text only; no submit_review",
+    "result": "ValueError: model did not submit within allowed iterations"
+  },
+  "outbound_followup_or_result_sent": false,
+  "remaining": [
+    "actual mailbox restart and original deadline",
+    "real 60 second reminder",
+    "real reply continuation and duplicate delivery"
+  ]
+}

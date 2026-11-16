@@ -87,7 +87,7 @@ def review_request(client, model, snapshot, max_iterations=6):
             if not any(re.search(bounded_quote, source) for source in sources):
                 raise ValueError("amount 引文不能截取原文金额的部分数字")
             number = r"[0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?"
-            # Only explicit CNY prices (or a quote consisting of the number) count.
+            # Explicit CNY prices and the supported quote labels identify prices.
             # Seat counts and subscription durations cannot justify a new price.
             if re.fullmatch(number, quote):
                 currency = bounded_quote + r"\s*元"
@@ -102,6 +102,9 @@ def review_request(client, model, snapshot, max_iterations=6):
                 )
             else:
                 prices = re.findall(r"(?<![0-9.,+\-])(" + number + r")\s*元", quote)
+                prices += re.findall(
+                    r"(?:报价|预计费用)\s*[:：]\s*(" + number + r")(?![0-9.,])", quote
+                )
             if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", amount) or not any(
                 Decimal(price.replace(",", "")) == Decimal(amount) for price in prices
             ):

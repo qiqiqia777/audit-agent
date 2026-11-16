@@ -1,0 +1,126 @@
+{
+  "baseline": "f7459bbe4aaf6776632f9340db072a4e6077c2ea",
+  "evidence_type": "fictional demo main + real browser + readonly SQLite snapshots; no IMAP/SMTP or model",
+  "wait_before_restart": {
+    "id": 1,
+    "application_id": 2,
+    "version": 1,
+    "kind": "request",
+    "body": "请补充采购申请 #2（演示软件）的材料：报价是每席位价格，还是全部席位合计？",
+    "state": "sent",
+    "sent_at": 1794727303.7662349,
+    "due_at": 1794727363.7662349,
+    "message_id": "<demo-out-1@example.test>",
+    "closed_at": null
+  },
+  "wait_after_restart": {
+    "id": 1,
+    "application_id": 2,
+    "version": 1,
+    "kind": "request",
+    "body": "请补充采购申请 #2（演示软件）的材料：报价是每席位价格，还是全部席位合计？",
+    "state": "sent",
+    "sent_at": 1794727303.7662349,
+    "due_at": 1794727363.7662349,
+    "message_id": "<demo-out-1@example.test>",
+    "closed_at": null
+  },
+  "parallel_device": {
+    "id": 1,
+    "decision": "approved",
+    "decided_at": "2026-11-15 07:21:52",
+    "notification_status": "sent"
+  },
+  "reply": {
+    "application_id": 2,
+    "version": 2,
+    "total_cny": "7200.00",
+    "followups": [
+      {
+        "id": 1,
+        "application_id": 2,
+        "version": 1,
+        "kind": "request",
+        "body": "请补充采购申请 #2（演示软件）的材料：报价是每席位价格，还是全部席位合计？",
+        "state": "sent",
+        "sent_at": 1794727303.7662349,
+        "due_at": 1794727363.7662349,
+        "message_id": "<demo-out-1@example.test>",
+        "closed_at": "2026-11-15 07:23:29"
+      },
+      {
+        "id": 2,
+        "application_id": 2,
+        "version": 1,
+        "kind": "reminder",
+        "body": "补件提醒：请补充采购申请 #2（演示软件）的材料：报价是每席位价格，还是全部席位合计？",
+        "state": "cancelled",
+        "sent_at": null,
+        "due_at": null,
+        "message_id": null,
+        "closed_at": "2026-11-15 07:23:29"
+      }
+    ],
+    "outbox_count_after_stale_rejection": 2
+  },
+  "duplicate": {
+    "same_message_id": "<demo-reply-c5518aef05c843328f02a3353f84d4f3@example.test>",
+    "unchanged_application": true,
+    "version": 2,
+    "mail_history_count": 2
+  },
+  "without_page_refresh": {
+    "observed_at": 1794727512.059305,
+    "read_only_observer": true,
+    "followups": [
+      {
+        "id": 4,
+        "application_id": 5,
+        "version": 1,
+        "kind": "reminder",
+        "body": "补件提醒：请补充采购申请 #5（项目甲软件）的材料：报价是每席位价格，还是全部席位合计？",
+        "state": "draft",
+        "sent_at": null,
+        "due_at": null,
+        "message_id": null,
+        "closed_at": null
+      },
+      {
+        "id": 3,
+        "application_id": 5,
+        "version": 1,
+        "kind": "request",
+        "body": "请补充采购申请 #5（项目甲软件）的材料：报价是每席位价格，还是全部席位合计？",
+        "state": "sent",
+        "sent_at": 1794727433.4465744,
+        "due_at": 1794727493.4465744,
+        "message_id": "<demo-out-3@example.test>",
+        "closed_at": null
+      }
+    ]
+  },
+  "assignment": {
+    "candidates": [
+      2,
+      5,
+      6
+    ],
+    "unchanged_before_choice": true,
+    "unchanged_after_sales_rejection": true,
+    "changed_application_ids": [
+      5
+    ],
+    "selected": 5,
+    "seats_before": 5,
+    "seats_after": 9,
+    "other_candidates_seats": {
+      "2": 5,
+      "6": 5
+    }
+  },
+  "limitations": [
+    "demo main, not live mailbox main",
+    "browser cross-session rejection is CSRF403; valid sales CSRF department guard tested separately by HTTP404",
+    "human QA pending"
+  ]
+}
