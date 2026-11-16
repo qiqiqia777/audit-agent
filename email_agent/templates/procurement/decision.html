@@ -1,0 +1,16 @@
+{% if r.decision %}<p>已{{decisions[r.decision]}} · {{r.decided_by}} · {{r.decided_at|local_time}} · {{states[r.notification_status]}}</p>
+            {% set latest=r.notification_attempts[-1] %}
+            <h2>发送记录</h2>{% for a in r.notification_attempts %}<p>第 {{loop.index}} 次 · {{states[a.state]}} · {{a.created_at|local_time}} · 通知内容版本未单独记录 · 记录归属者 {{a.actor if a.actor!='migration' else '未记录'}}</p>
+            <p>收件人 {{a.recipient}} · {{a.body}}</p>
+            {% if a.message_id %}<p>邮件编号 {{a.message_id}}</p>{% endif %}
+            {% if a.actor=='migration' or not a.message_id %}<p>历史迁入或尚未发送的记录：原发送时间与操作者未记录，记录时间不代表投递时间。</p>{% endif %}{% if a.verified_by %}<p>核实人 {{a.verified_by}} · {{a.verification_note}} · {{a.verified_at|local_time}}</p>{% endif %}{% endfor %}
+            {% if latest.state in ['failed','pending'] %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
+            <input type="hidden" name="attempt" value="{{latest.id}}"><p>发送内容：{{latest.body}}</p><button name="retry">确认补发通知</button></form>
+            {% elif latest.state=='unknown' %}<form method="post"><input type="hidden" name="csrf" value="{{session.csrf}}">
+            <input type="hidden" name="attempt" value="{{latest.id}}"><label>请先核对邮箱与发送记录，填写依据 <input name="note" required></label>
+            <button name="verify" value="yes">确认已送达</button><button name="verify" value="no">确认未送达，允许补发</button></form>{% endif %}
+            {% else %}{% for choice,body in previews.items() %}<form method="post">
+            <p>发给 {{r.sender}}：{{body}}</p><input type="hidden" name="csrf" value="{{session.csrf}}">
+            <input type="hidden" name="version" value="{{r.version}}"><button name="decision" value="{{choice}}"
+            {% if (choice=='approved' and r.review.questions) or (r.model_review and r.model_review.state!='completed') %}disabled{% endif %}>{{decisions[choice]}}并通知</button>
+            </form>{% endfor %}{% endif %}
