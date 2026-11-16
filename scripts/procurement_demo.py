@@ -35,6 +35,12 @@ def create_demo(directory):
             "采购对象：演示显示器\n业务用途：设计校色\n规格：27英寸\n数量：2\n报价：1200.55\n费用口径：单价",
         ),
         (
+            "missing-purpose",
+            "employee@example.test",
+            "软件订阅申请",
+            "采购对象：演示软件\n席位数：5\n订阅期限：12个月\n报价：120元/月\n费用口径：每席",
+        ),
+        (
             "software",
             "employee@example.test",
             "软件订阅申请",
