@@ -1,23 +1,14 @@
 ---
 name: ship
-description: Commit and push the current work properly — lint, run the release gate, write a detailed commit message, push to GitHub. Use whenever work reaches a milestone or the user says ship it, commit, or push.
+description: Ship a verified milestone through a development branch and pull request with review evidence and current CI.
 ---
 
-## Procedure
+Read docs/development-workflow.md before shipping; it owns completion and merge rules.
 
-1. `make lint` — fix anything it flags before continuing.
-2. `make gate` — the release gate. Deterministic evals must pass 100%; judge
-   evals must clear threshold when an API key is present. If the gate closes,
-   fix the cause (or, if a finding is a genuine behavior change, update the
-   eval WITH the user's agreement) — never push a red gate.
-3. Review `git status` and `git diff` — confirm nothing unintended is staged
-   (especially nothing from `.minihermes/` or `.env`).
-4. Commit with a detailed message:
-   - Subject: imperative, specific ("Fix triple-booking from first live test"),
-     never generic ("update code", "fixes").
-   - Body: WHY the change exists, what evidence motivated it (live bug, trace,
-     eval failure), and what verification it survived.
-   - End with: `Co-Authored-By: Claude <the current model's attribution line>`
-5. `git push origin main`.
-6. Confirm CI: `gh run list --limit 1` — if CI fails, fix forward immediately;
-   don't leave main red.
+1. Run Ruff and the release gate (Makefile or equivalent Python commands). Record skipped judge/live tests honestly.
+2. Inspect status and diff. Stage only intended files; keep secrets and runtime data local.
+3. Commit a specific subject and a body explaining why and what verification passed. Use truthful attribution.
+4. Push the current codex/ branch, then create/update its PR against main.
+5. Include Ticket/requirements, Baseline/Head, Standards/Spec review and fixes, validation by evidence type, and remaining limitations.
+6. Wait for checks on the PR's latest head SHA. Repair failures and verify the new head.
+7. Apply the project's merge/completion rules. Keep unmet acceptance items open and report the PR URL.

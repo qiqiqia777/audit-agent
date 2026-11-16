@@ -3,6 +3,8 @@
 核对日期：2026-11-16。当前完整证据索引为[最终交付报告](procurement-final-acceptance.md)，逐段覆盖PRD六段现场流程和D1–D21，区分离线、真实模型、真实邮件、浏览器及人工QA。
 早期阶段报告保留历史失败和当时未满足项；当前状态以本索引、最终报告及GitHub实际合并状态为准。
 
+后续开发按[开发与验收流程](development-workflow.md)执行；原 #15–#19 的拆分保留为[历史任务记录](procurement-remaining-tickets.md)。
+
 ## 子任务与交付
 
 | 子任务 | 当前结果 | 可核验记录 |
@@ -13,7 +15,7 @@
 | #18 发送恢复 | PR25已合并、Issue已关闭；6项受控故障后的真实SMTP/IMAP、IAB、核心页面用户QA、HTTP/Store并发及迁移回归 | [恢复报告](procurement-send-recovery-verification.md)、[六项摘要](recovery-browser-20261115/live-mail-summary.json)、[PR25](https://github.com/qiqiqia777/audit-agent/pull/25) |
 | #19 干净安装及最终交付 | 原PR22集成main25e02b6；完整独立wheel环境、真实设备链路及邮箱/Web重启通过；发布/审查/CI和合并状态见原PR | [最终报告](procurement-final-acceptance.md)、[历史安装](procurement-install-verification.md)、[本轮摘要](install-20261116-summary.json)、[PR22](https://github.com/qiqiqia777/audit-agent/pull/22) |
 
-父[#3](https://github.com/qiqiqia777/audit-agent/issues/3)/[#4](https://github.com/qiqiqia777/audit-agent/issues/4)须在#19交付后逐项核对原始条件才关闭；不能以提交或打开PR代替验收。流程规则PR20仍留用户审阅，未作为本票前提合并。
+截至2026-11-16，#15–#19及父[#3](https://github.com/qiqiqia777/audit-agent/issues/3)/[#4](https://github.com/qiqiqia777/audit-agent/issues/4)均已实际交付并关闭。PR21/23/24/25/22均已合并；完整核对见[最终报告](procurement-final-acceptance.md)。流程规则PR20仍单独留用户审阅，不改变已完成的功能验收。
 
 ## 分类型证据与边界
 

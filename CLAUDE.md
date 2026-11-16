@@ -31,12 +31,10 @@ for its own sake is not.
   *immediately before each run*. Permission never carries over from a previous run.
   The script backs up first, but restoring is a hassle — ask, wait for a clear yes,
   then run. It refuses to do anything without the `--yes` flag for this reason.
-- **Version control — commit AND push every milestone, same turn.** The moment a change
-  works (tests pass / verified live), commit it with a detailed message (subject = what,
-  body = WHY + what it survived) and `git push origin main` before moving on. Never end a
-  turn or session with working changes left uncommitted — the repo must always be traceable
-  from GitHub, and uncommitted work has been lost to branch switches before. Use the `/ship`
-  skill. If several milestones land in one session, commit each as its own logical commit.
+- **Development workflow:** follow [the project workflow](docs/development-workflow.md)
+  when planning, implementing, reviewing or shipping. Commit each verified milestone on
+  a `codex/` branch and ship through a PR with CI for its latest head. Preserve unrelated
+  local work in its original worktree. Record the implementation baseline before edits.
 - **Gate before push**: `make gate` (deterministic must pass; judge runs with a key).
   When a live bug is found, fix it AND add a regression case to `evals/deterministic/`.
 - **No emojis** in any UI surface (dashboard, CLI output, README prose).
