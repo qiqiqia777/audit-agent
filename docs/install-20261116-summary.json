@@ -1,0 +1,55 @@
+{
+  "source_head": "843e9aa168607cbfaf2978f8afa62b6f8cc1fd00",
+  "wheel": {
+    "sha256": "152af21d91c58a14c1af02cd2426afcbc6e0385815a7bcb8e0959400051ddfe2",
+    "required_files": [
+      "email_agent/procurement.py",
+      "email_agent/procurement_mailbox.py",
+      "email_agent/procurement_worker.py",
+      "email_agent/procurement_web.py",
+      "minihermes/ops/procurement_policy.json"
+    ]
+  },
+  "inbox_started": true,
+  "actual_IMAP_intake": {
+    "application": 1,
+    "count": 1
+  },
+  "real_model": {
+    "exit": 0,
+    "state": "completed",
+    "error": null,
+    "total": "100.00"
+  },
+  "actual_HTTP_approval": {
+    "decision": "approved",
+    "notification": "sent"
+  },
+  "actual_SMTP_IMAP_result": true,
+  "restart": {
+    "inbox_and_web_new_processes": true,
+    "IMAP_cursor_unchanged": true,
+    "real_decision_and_single_notification_preserved": true,
+    "controlled_wait_entire_record_unchanged": true,
+    "sent_at": 1794821866.3670015,
+    "due_at": 1794825466.3670015,
+    "wait_boundary": "synthetic sent state / 3600 seconds, no SMTP for this record"
+  },
+  "all_checks_passed": true,
+  "own_processes_stopped": true,
+  "environment": "Windows / Python3.12.10 / separate wheel venv with runtime and dev dependencies",
+  "import_verified": "email_agent and minihermes modules under new venv site-packages; cwd outside source",
+  "boundaries": {
+    "mail": "self-owned test mailbox, fictional sample, isolated IMAP folder; original copied from real INBOX",
+    "approval": "actual loopback Web HTTP login and manager confirmation, no browser/user QA this run",
+    "wait": "separate synthetic sent record / 3600 seconds; actual 60sec chain retained from Issue17",
+    "migration": "four controlled legacy schema regressions; no production database migration",
+    "config": "existing authorized configuration read-only, credentials and original message IDs stay private"
+  },
+  "exact_receipt": {
+    "matching_messages": 1,
+    "Message_ID_or_X_Audit_exact": true,
+    "sender_subject_and_full_body_exact": true,
+    "no_resend": true
+  }
+}
