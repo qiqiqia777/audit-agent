@@ -3,8 +3,8 @@
 在 audit-agent 仓库根目录使用 Python 3.12 安装项目。安装包同时包含邮箱流程和 MiniHermes 材料检查。
 
 ```powershell
-uv venv --python 3.12
-uv pip install -e '.[dev]'
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -e '.[dev]'
 .\.venv\Scripts\python -m pytest -q evals/deterministic/test_equipment_intake.py evals/deterministic/test_procurement_web.py
 ```
 
@@ -23,7 +23,12 @@ uv pip install -e '.[dev]'
 .\.venv\Scripts\python -c "from getpass import getpass; from werkzeug.security import generate_password_hash; print(generate_password_hash(getpass()))"
 ```
 
-在本地环境文件配置 IMAP_HOST、IMAP_USER、IMAP_PASSWORD、SMTP_HOST 和 SEND_WHITELIST。演示可让登记的员工地址与测试邮箱相同。为两条命令指定相同的 DATA_DIR 和名册。分别在两个终端运行收信服务和负责人页面。
+在本地环境文件配置 IMAP_HOST、IMAP_USER、IMAP_PASSWORD、SMTP_HOST 和 SEND_WHITELIST。
+DATA_DIR设为独立数据目录的绝对路径，三个进程使用同一个DATA_DIR和同一份名册。
+IMAP_FOLDER默认INBOX，隔离复演可指定已创建的专用文件夹；POLL_INTERVAL_SECONDS默认60且须大于0。
+SMTP_USER/SMTP_PASSWORD默认复用IMAP账号/密码，默认IMAP_PORT=993、SMTP_PORT=465。
+演示可让登记的员工地址与测试邮箱相同，SEND_WHITELIST只列授权测试地址。凭据不提交仓库。
+分别在两个终端运行收信服务和负责人页面。
 
 ```powershell
 .\.venv\Scripts\python -m email_agent.procurement_mailbox --roster C:\demo\roster.json --env-file .env
@@ -79,4 +84,34 @@ PROCUREMENT_WAIT_SECONDS 默认 172800（48 小时），演示设为 60。补件
 - 连接中断或进程退出后发送结果不明时，页面显示发送结果待核实。负责人先核对收件箱和服务器记录，填写核实依据，并选择已送达或未送达。确认未送达后才出现补发入口。
 - 若在决定保存后、发信认领前进程退出，页面保留待发送通知，可以确认继续发送。重复提交旧页面不能重复领取同一次发送。
 
-当前通知恢复经过模拟拒收、连接中断、并发领取和旧数据库迁移的离线验证。真实服务商故障及浏览器整段恢复流程待现场验收，记录在 Issue #4。
+通知恢复已有离线回归、实际IAB浏览器与用户核心页面QA，并在受控注入故障后核对六项真实SMTP/IMAP恢复；
+详见[恢复报告](procurement-send-recovery-verification.md)。故障为适配层注入，不代表服务商实际故障。
+用户已接受：缺历史等待时长且已送达的旧补件记录保留待核实、不自动催办、不重发；不要用当前配置猜历史截止。
+
+## 安装包与重启复演
+
+开发方式采用上面的editable安装。也可构建wheel，在另一全新环境安装；以下为PowerShell命令，
+路径由使用者选定，不覆盖原运行数据：
+
+```powershell
+.\.venv\Scripts\python -m pip wheel --no-deps --wheel-dir dist .
+python -m venv .venv-package
+.\.venv-package\Scripts\python -m pip install 'dist/mini_hermes-0.1.0-py3-none-any.whl[dev]'
+.\.venv-package\Scripts\python -m pip check
+.\.venv-package\Scripts\procurement-inbox --roster C:\demo\roster.json --env-file C:\demo\procurement.env
+# 在其他终端以同一配置分别启动：
+.\.venv-package\Scripts\procurement-review --env-file C:\demo\procurement.env --glm-compat
+.\.venv-package\Scripts\procurement-web --roster C:\demo\roster.json --env-file C:\demo\procurement.env
+```
+
+使用`--glm-compat`时必须在本地配置GLM_API_KEY、GLM_BASE_URL、GLM_MODEL；其他提供商按“模型审查”节配置并省略该参数。
+验证包导入时从源码目录外运行，打印模块`__file__`应位于新环境site-packages。
+生产三个入口与规则/本地收件箱演示入口分开，后者不会连接真实邮箱。
+
+重启时先停止本次运行的三个服务，保留DATA_DIR，重新执行相同命令；Web重启后重新登录。
+库初始化会幂等补齐旧表结构，模型工作进程会重新排队running任务；failed任务须先解决错误再显式`--retry-failed`。
+不要删除数据库、游标或运行目录。核对原申请编号、材料版本、决定、通知尝试、补件sent_at/due_at均保留；
+未知发送结果按“通知恢复”节先核实，不直接重复批准或发送。
+
+本机Windows/Python3.12的实际安装、真实链路与受控旧库迁移结果见[最终报告](procurement-final-acceptance.md)。
+报告区分wheel进程重启、历史迁移回归和#17真实60秒链路，不声称执行过生产旧库升级。

@@ -3,6 +3,68 @@ import re
 from scripts.procurement_demo import create_demo
 
 
+def test_same_software_history_keeps_current_purpose_required_and_department_private(tmp_path):
+    app, store = create_demo(tmp_path)
+    client = app.test_client()
+
+    def login(user):
+        page = client.get("/login").get_data(as_text=True)
+        token = re.search('name="csrf" value="([^"]+)"', page)[1]
+        assert (
+            client.post(
+                "/login", data={"csrf": token, "user": user, "password": "demo-only"}
+            ).status_code
+            == 302
+        )
+        with client.session_transaction() as session:
+            return session["csrf"]
+
+    token = login("design")
+    records = [store.detail(r["id"], "设计部") for r in store.inbox("设计部")]
+    current = next(
+        r
+        for r in records
+        if r["materials"].get("item") == "演示软件" and not r["materials"].get("purpose")
+    )
+    history = next(
+        r
+        for r in records
+        if r["decision"] == "approved" and r["materials"].get("item") == "演示软件"
+    )
+    url = f"/requests/{current['id']}"
+    page = client.get(url).get_data(as_text=True)
+    assert "设计部历史出图" in page and "销售部专用历史" not in page
+    assert f"/requests/{history['id']}" in page
+    summary = re.search(
+        rf'<p><a href="/requests/{history["id"]}">.*?</p>', page, re.DOTALL
+    )[0]
+    assert all(value in summary for value in ("软件订阅", "设计部历史出图", "1200.00 元", "批准"))
+    assert "请补充业务用途" in page
+    assert re.search(r'<button[^>]*value="approved"\s+disabled', page)
+    assert client.get(f"/requests/{history['id']}").status_code == 200
+    assert (
+        client.post(
+            url, data={"csrf": token, "version": current["version"], "decision": "approved"}
+        ).status_code
+        == 409
+    )
+    assert store.detail(current["id"], "设计部")["decision"] is None
+    assert client.get("/demo/outbox").json == []
+
+    token = login("sales")
+    inbox = client.get("/").get_data(as_text=True)
+    assert f'href="{url}"' not in inbox
+    assert client.get(url).status_code == 404
+    assert client.get(f"/requests/{history['id']}").status_code == 404
+    assert (
+        client.post(
+            url, data={"csrf": token, "version": current["version"], "decision": "approved"}
+        ).status_code
+        == 404
+    )
+    assert client.get("/demo/outbox").json == []
+
+
 def test_manual_demo_supports_confirmation_recovery_and_department_isolation(tmp_path):
     app, store = create_demo(tmp_path)
     client = app.test_client()
@@ -94,3 +156,34 @@ def test_manual_demo_supports_confirmation_recovery_and_department_isolation(tmp
         for ident, materials in before.items()
         if ident != selected
     )
+
+
+def test_other_department_cannot_assign_pending_change_with_valid_csrf(tmp_path):
+    app, store = create_demo(tmp_path)
+    client = app.test_client()
+
+    def login(user):
+        page = client.get("/login").get_data(as_text=True)
+        token = re.search('name="csrf" value="([^"]+)"', page)[1]
+        assert client.post(
+            "/login", data={"csrf": token, "user": user, "password": "demo-only"}
+        ).status_code == 302
+        with client.session_transaction() as session:
+            return session["csrf"]
+
+    token = login("design")
+    before = {r["id"]: store.detail(r["id"], "设计部") for r in store.inbox("设计部")}
+    assert client.post(
+        "/demo/reply", data={"csrf": token, "ident": "", "body": "改成9席"}
+    ).status_code == 302
+    (change,) = store.pending_changes("设计部")
+    assert len(change["candidates"]) >= 2
+
+    token = login("sales")
+    assert "补件归属待确认" not in client.get("/").get_data(as_text=True)
+    assert client.post(
+        "/assign",
+        data={"csrf": token, "key": change["mail_key"], "ident": change["candidates"][0]},
+    ).status_code == 404
+    assert store.pending_changes("设计部") == [change]
+    assert all(store.detail(ident, "设计部") == record for ident, record in before.items())

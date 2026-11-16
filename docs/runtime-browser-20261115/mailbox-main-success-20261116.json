@@ -1,0 +1,54 @@
+{
+  "sample": "0d72036ec394",
+  "original_failure": "evidence.json",
+  "B_finished_during_A_wait": {
+    "decided_at_epoch": 1794820166.0,
+    "deadline": 1794820178.3786135,
+    "before_deadline": true,
+    "actual_result_received": true
+  },
+  "original_wait": {
+    "sent_at": 1794820118.3786135,
+    "due_at": 1794820178.3786135,
+    "state": "sent"
+  },
+  "restart_preserved_original_wait": true,
+  "single_reminder_after_real_60_seconds": true,
+  "actual_IMAP_same_Message_ID_replay_unchanged": true,
+  "reply_result": {
+    "version": 4,
+    "model_review": {
+      "state": "completed",
+      "error": null
+    },
+    "total": "7200.00"
+  },
+  "stale_send": {
+    "status": 409,
+    "additional_SMTP_calls": 0
+  },
+  "all_checks_passed": true,
+  "product_fix_commit": "3642724eece059dfe5a4dfaa5f944416afb72fbf",
+  "first_run": {
+    "software": "failed/ValueError",
+    "equipment": "failed/ValueError",
+    "failure_preserved": true,
+    "diagnostic": "correct amount=120, quote=报价：120 repeatedly rejected by currency-only evidence validator"
+  },
+  "correction": {
+    "red_regression": "4 failed, 4 passed",
+    "affected_tests": "32 passed",
+    "full_gate": "315 passed, 11 existing live skipped",
+    "judge": "no default anthropic key",
+    "worker_recovery": "same applications via --glm-compat --once --retry-failed, default 10 iterations; initial harness and readonly diagnostic used 6"
+  },
+  "observation_correction": "Original harness checked current time after IMAP receipt and failed. Persisted B decided_at 09:09:26 UTC is before A deadline 09:09:38 UTC. No B resend or application replacement; original failed assertion retained.",
+  "receipt_matching": "subject + self sender + normalized body + exact Message-ID or X-Audit-Message-ID; service rewrites Message-ID",
+  "evidence_boundaries": {
+    "real": "SMTP/IMAP mailbox main, model worker and reply review, same-dir actual process restart, 60-second maintenance reminder, same Message-ID IMAP APPEND",
+    "http": "manager confirmation and stale reminder 409",
+    "browser": "existing 12 IAB screenshots retained; no new browser run",
+    "user_QA": "existing confirmed scenes retained; not repeated",
+    "concurrency": "existing controlled-order regression; no claim about arbitrary real network ordering"
+  }
+}

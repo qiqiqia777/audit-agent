@@ -1,49 +1,33 @@
 # 采购需求验收状态
 
-核对日期为 2026-11-15。此表记录阶段证据，完整验收仍在进行。
+核对日期：2026-11-16。当前完整证据索引为[最终交付报告](procurement-final-acceptance.md)，逐段覆盖PRD六段现场流程和D1–D21，区分离线、真实模型、真实邮件、浏览器及人工QA。
+早期阶段报告保留历史失败和当时未满足项；当前状态以本索引、最终报告及GitHub实际合并状态为准。
 
-剩余工作已拆为 [#15–#19](procurement-remaining-tickets.md)，按 [开发流程](development-workflow.md) 逐票交付。
+后续开发按[开发与验收流程](development-workflow.md)执行；原 #15–#19 的拆分保留为[历史任务记录](procurement-remaining-tickets.md)。
 
-## 需求与证据
+## 子任务与交付
 
-| 需求 | 当前证据 | 仍需完成 |
+| 子任务 | 当前结果 | 可核验记录 |
 | --- | --- | --- |
-| D1、D2 内部使用与个人演示 | 本机 Web、虚构名册与单账号真实测试邮箱 | 完整浏览器演示 |
-| D3、D6 三周 84 小时投入 | 需求与实现计划保留预算 | 未以自动运行时长替代个人投入或声称已达成 |
-| D4、D7 场景范围 | D4 已由采购场景替代；两类材料检查和同一审批入口 | 全部现场流程 |
-| D5 页面、真实链路与交付物 | 页面含建议、草稿、历史、审批与发送记录；已提交架构、部署和阶段报告 | 浏览器视觉与交互验收、最终报告收口 |
-| D8、D11 邮件与人工确认 | 设备和软件真实自发自收；预览不发信与确认后发信有 HTTP 测试 | 真实浏览器走查 |
-| D9 单级审批 | 登录负责人提交决定，模型工具无审批或发信权限 | 现场复演 |
-| D10 两类材料与金额 | 确定性规则与模型工具提交；5 席两种口径 7200/1440，8 席 11520 | 扩充真实模型表达样例 |
-| D12 版本审批 | 旧版本提交 409，无决定和结果外发；真实模型审查后再次更新版本 | 浏览器旧标签页演示 |
-| D13 制度与历史 | 版本化 JSON、条款编号和原文、授权案例工具、页面链接 | 现场核对同款历史获批且本次缺项 |
-| D14 并行与恢复 | A 等补件时 B 可决定；数据库重开、重复事件与回复续接测试 | 完整现场重启演示 |
-| D15 催办 | mailbox main 实际维护线程测试、并发去重、原截止保留、回复撤销与两种先后顺序 | 真实 60 秒浏览器演示 |
-| D16 决定与通知状态 | 拒收、未知结果、核实、补发、并发领取、进程退出阶段、旧数据迁移测试；真实结果收到 | 浏览器故障与恢复演示 |
-| D17 归属 | 主题编号、原会话、出站编号及服务商别名；候选选择前不改材料，选择后仅一份更新 | 浏览器候选选择 |
-| D18 案例范围与员工信息 | 同部门同类已办结摘要/原记录、跨部门拒绝测试；通知模板只含当前申请 | 双部门现场核对 |
-| D19 身份与部门 | 登录、部门限定 SQL、详情/审批跨部门拒绝；历史页面转义和拒绝测试 | 双部门浏览器记录 |
-| D20 两模块职责与续办 | email_agent 拥有状态和收发，MiniHermes 实际工具循环处理材料与引用 | 持续按架构验证 |
-| D21 真实/受控证据区分 | 下表分别记录真实模型、真实邮件与模拟故障 | 最终报告逐项链接全部现场记录 |
+| #15 双部门案例与本次缺用途 | PR21已合并、Issue已关闭；HTTP、7张IAB截图和用户QA齐全 | [案例报告](procurement-case-scope-verification.md)、[PR21](https://github.com/qiqiqia777/audit-agent/pull/21) |
+| #16 软件报价、表达和旧页面 | PR23按用户授权合并、Issue已关闭；1440/1440/7200真实表达、8席11520、旧页保护与用户QA；保留原金额错误和修复过程 | [软件报告](procurement-software-browser-verification.md)、[最终表达JSON](software-model-20261115/bounded-final.json)、[PR23](https://github.com/qiqiqia777/audit-agent/pull/23) |
+| #17 等待、重启、催办撤销与归属 | PR24已合并、Issue已关闭；真实main/模型/SMTP/IMAP、60秒/原截止/同ID重放/7200回复；既有IAB和用户QA | [运行报告](procurement-wait-browser-verification.md)、[真实摘要](runtime-browser-20261115/mailbox-main-success-20261116.json)、[PR24](https://github.com/qiqiqia777/audit-agent/pull/24) |
+| #18 发送恢复 | PR25已合并、Issue已关闭；6项受控故障后的真实SMTP/IMAP、IAB、核心页面用户QA、HTTP/Store并发及迁移回归 | [恢复报告](procurement-send-recovery-verification.md)、[六项摘要](recovery-browser-20261115/live-mail-summary.json)、[PR25](https://github.com/qiqiqia777/audit-agent/pull/25) |
+| #19 干净安装及最终交付 | 原PR22集成main25e02b6；完整独立wheel环境、真实设备链路及邮箱/Web重启通过；发布/审查/CI和合并状态见原PR | [最终报告](procurement-final-acceptance.md)、[历史安装](procurement-install-verification.md)、[本轮摘要](install-20261116-summary.json)、[PR22](https://github.com/qiqiqia777/audit-agent/pull/22) |
 
-## 关键验证记录
+截至2026-11-16，#15–#19及父[#3](https://github.com/qiqiqia777/audit-agent/issues/3)/[#4](https://github.com/qiqiqia777/audit-agent/issues/4)均已实际交付并关闭。PR21/23/24/25/22均已合并；完整核对见[最终报告](procurement-final-acceptance.md)。流程规则PR20仍单独留用户审阅，不改变已完成的功能验收。
 
-| 范围 | 方法 | 结果位置 |
-| --- | --- | --- |
-| 设备完整申请到通知 | 真实 IMAP/SMTP + HTTP 审批表单 | 原测试邮箱工程 data/procurement-acceptance/ae40861e2bd3/evidence.json，公开摘要在 PR #7 |
-| 自然语言材料理解 | 真实 glm-4.5-air；初次漏字段后完善 schema | [模型阶段报告](procurement-model-verification.md) |
-| 软件补件、7200、8 席、11520、旧表单与批准通知 | 真实邮箱 + 真实模型 + HTTP 表单；保留错误回退与修复记录 | 统一仓库本机 data/procurement-acceptance/software-bulk-20261115/evidence.json；公开摘要见模型阶段报告 |
-| 催办及网络等待时的维护入口 | 模拟网络、实际维护线程和 SQLite；受控时钟及有序并发 | [运行验证](procurement-runtime-verification.md) |
-| 通知异常、补发与核实 | 模拟 SMTP 拒收/断连、实际页面 HTTP 路由和 SQLite | evals/deterministic/test_procurement_notifications.py |
-| 原文历史与隔离 | 实际 HTTP 路由，模拟两部门和含脚本的邮件 | evals/deterministic/test_procurement_web.py |
+## 分类型证据与边界
 
-浏览器自动化工具初始化时报告运行环境路径缺失，重置及后续复查仍未恢复。
-因此 HTTP 表单结果不会写成浏览器人工走查已通过。
-本机原文与账号仅留在被忽略的数据目录，公开文档描述脱敏样例和验证方式。
+- 离线：集成完整release gate **315 passed、11既有live skipped**；默认anthropic无活动key，judge skipped。本轮四项历史迁移/并发升级回归通过。模拟时钟、故障和HTTP不能代替浏览器或真实邮箱。
+- 真实模型：[模型阶段与软件往返](procurement-model-verification.md)、#16固定三表达、#17原失败申请恢复，本轮独立wheel模型审查设备100元。失败、诊断、修复和重验均保留，不声明任意自然语言稳定。
+- 真实邮件：首个设备链路摘要见[PR7](https://github.com/qiqiqia777/audit-agent/pull/7)；软件补件/7200/8席11520/结果收件见模型阶段报告；#17/#18实际主入口及投递摘要见上表；#19本轮设备邮件、HTTP批准、结果收件来自新装wheel。全部使用授权测试邮箱和虚构材料。
+- 浏览器：#15/#16/#17/#18分别保留7/10/12/10张IAB截图及复演步骤。早期Windows Chrome的URL识别策略停止仍保留，没有绕过或重试被停止操作；后续IAB仅覆盖各自记录范围。
+- 人工QA：用户已确认#15双部门案例、#16报价和旧页、#17等待/重启/撤销/候选、#18四项核心恢复。分项报告保存实际反馈，本轮没有新增或重复要求QA，不把助手浏览器或HTTP当用户QA。
 
-用户已选择稍后手动验收浏览器。已准备 [检查清单与独立演示入口](procurement-manual-checklist.md)，待用户反馈后更新本表。
+用户2026-11-16明确同意合并PR23并接受PR25旧数据限制：缺历史等待时长且已送达的旧记录保留待核实、不自动催办、不重发；不猜历史截止、不新增补录规则。正常发送仍从成功发出计时。
+其他边界（单账号自发自收、受控故障、#17到期后重启、#19模拟等待记录）详见最终报告；没有生产/跨服务商保证。
 
-## 最终完成条件
+## 交付物入口
 
-逐段跑完 PRD 六段现场流程，将架构、部署与复演命令从干净检出验证，并保存每项预期与实际结果。
-所有明确需求有对应证据后才关闭余下 Issue 并完成连续目标。
+[产品需求](08-procurement-approval-requirements.md) · [术语表](../GLOSSARY.md) · [职责ADR](adr/0001-procurement-workflow-ownership.md) · [架构](procurement-architecture.md) · [安装部署](procurement-local-demo.md) · [规则演示和人工清单](procurement-manual-checklist.md) · [最终测试与六段复演映射](procurement-final-acceptance.md)。
