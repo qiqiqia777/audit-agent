@@ -30,4 +30,7 @@
 
 ## 交付物入口
 
+2026-11-17新增前端子任务：#28列表/邮件异常待办的[本轮验证](procurement-list-ui-verification.md)。
+该票叠加于详情PR30，浏览器与人工QA待补，保持草稿；不改变#15–#19已完成的历史结果。
+
 [产品需求](08-procurement-approval-requirements.md) · [术语表](../GLOSSARY.md) · [职责ADR](adr/0001-procurement-workflow-ownership.md) · [架构](procurement-architecture.md) · [安装部署](procurement-local-demo.md) · [规则演示和人工清单](procurement-manual-checklist.md) · [最终测试与六段复演映射](procurement-final-acceptance.md)。

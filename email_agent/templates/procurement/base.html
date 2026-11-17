@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{title}} · 采购审批</title>
+<link rel="stylesheet" href="{{url_for('static',filename='procurement/tabler-1.7.5.min.css.gz')}}">
+<link rel="stylesheet" href="{{url_for('static',filename='procurement/detail.css')}}">
+<link rel="stylesheet" href="{{url_for('static',filename='procurement/list.css')}}">
+</head><body>
+<a class="skip-link" href="#main-content">跳转到主要内容</a>
+<aside class="app-sidebar" aria-label="采购导航">
+  <a class="brand" href="{{url_for('inbox')}}"><span class="brand-mark">采</span><span>采购审批<span class="brand-subtitle">PROCUREMENT</span></span></a>
+  <div class="sidebar-caption">部门采购</div>
+  <a class="sidebar-link {{'active' if active_page=='list'}}" href="{{url_for('inbox')}}" {% if active_page=='list' %}aria-current="page"{% endif %}>申请列表</a>
+  <a class="sidebar-link {{'active' if active_page=='exceptions'}}" href="{{url_for('inbox',view='exceptions')}}" {% if active_page=='exceptions' %}aria-current="page"{% endif %}>邮件异常待办</a>
+  {% if r is defined %}<span class="sidebar-link active" aria-current="page">申请详情</span>{% endif %}
+  <div class="sidebar-footer"><strong>{{department}}</strong><br>负责人 · {{session.manager}}</div>
+</aside>
+<div class="app-content" id="main-content" tabindex="-1">
+<header class="app-topbar"><span>采购管理 / {{title}}</span><span>{{department}} · {{session.manager}}</span></header>
+{% block content %}{% endblock %}
+</div></body></html>

@@ -743,6 +743,36 @@ class ProcurementStore:
                 result["changes"]["预计总额"] = (old_total, result["review"]["estimated_total_cny"])
         return result
 
+    def listing_snapshot(self, department):
+        """Read only this department's rows and current-version followups atomically."""
+        with closing(self.connect()) as db:
+            db.execute("BEGIN")
+            rows = [
+                dict(r)
+                for r in db.execute(
+                    """SELECT a.*, (SELECT state FROM notification_attempts n
+                WHERE n.application_id=a.id ORDER BY n.id DESC LIMIT 1) AS latest_notification_state,
+                (SELECT state FROM review_jobs j WHERE j.application_id=a.id
+                ORDER BY j.id DESC LIMIT 1) AS review_state
+                FROM applications a WHERE a.department=? ORDER BY a.id DESC""",
+                    (department,),
+                )
+            ]
+            followups = {}
+            for f in db.execute(
+                """SELECT f.* FROM followups f JOIN applications a ON a.id=f.application_id
+                WHERE a.department=? AND f.version=a.version ORDER BY f.id""",
+                (department,),
+            ):
+                followups.setdefault(f["application_id"], []).append(dict(f))
+        for row in rows:
+            row["materials"] = json.loads(row["materials"])
+            row["review"] = json.loads(row["review"])
+            # Legacy migration preserves NULL summaries but creates an unknown attempt.
+            latest_notification_state = row.pop("latest_notification_state")
+            row["notification_status"] = row["notification_status"] or latest_notification_state
+        return rows, followups
+
     def inbox(self, department: str) -> list[dict]:
         with closing(self.connect()) as db:
             return [
