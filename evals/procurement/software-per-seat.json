@@ -1,0 +1,24 @@
+{
+  "id": "software-per-seat-001",
+  "task_version": "1",
+  "label_status": "engineering_expectation_pending_user_review",
+  "department": "设计",
+  "subject": "软件订阅申请",
+  "message": "申请订阅设计软件用于出图，需要5个席位，订阅12个月，每席位每月120元。",
+  "expected": {
+    "materials": {
+      "item": "设计软件",
+      "purpose": "出图",
+      "seats": 5,
+      "months": 12,
+      "amount": "120",
+      "billing_period": "monthly",
+      "price_basis": "per_seat"
+    },
+    "estimated_total_cny": "7200.00",
+    "model_review_state": "completed",
+    "review_status": "ready_for_review",
+    "decision": null,
+    "outbound_count": 0
+  }
+}
