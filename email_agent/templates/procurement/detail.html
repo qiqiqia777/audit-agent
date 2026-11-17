@@ -1,19 +1,5 @@
-<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{r.materials.get('item', '采购申请')}} · {{title}}</title>
-<link rel="stylesheet" href="{{url_for('static',filename='procurement/tabler-1.7.5.min.css.gz')}}">
-<link rel="stylesheet" href="{{url_for('static',filename='procurement/detail.css')}}">
-</head><body>
-<a class="skip-link" href="#request-summary">跳转到申请详情</a>
-<aside class="app-sidebar" aria-label="采购导航">
-  <a class="brand" href="{{url_for('inbox')}}"><span class="brand-mark">采</span><span>采购审批<span class="brand-subtitle">PROCUREMENT</span></span></a>
-  <div class="sidebar-caption">部门采购</div>
-  <a class="sidebar-link" href="{{url_for('inbox')}}">申请列表</a>
-  <span class="sidebar-link active" aria-current="page">申请详情</span>
-  <div class="sidebar-footer"><strong>{{department}}</strong><br>负责人 · {{session.manager}}</div>
-</aside>
-<div class="app-content">
-<header class="app-topbar"><span>采购管理 / <a href="{{url_for('inbox')}}">部门申请</a> / #{{r.id}}</span><span>{{department}} · {{session.manager}}</span></header>
+{% extends 'procurement/base.html' %}
+{% block content %}
 <main class="detail-container">
 <header class="request-hero" id="request-summary">
   <div><div class="eyebrow">{{'软件订阅' if r.category=='software' else '办公设备'}} · 申请 #{{r.id}}</div>
@@ -51,7 +37,8 @@
 </div></section>
 </div><aside class="action-column" aria-label="负责人操作">
 <section class="card" id="sending-records"><div class="card-header"><h2 class="card-title">审批与结果通知</h2></div><div class="card-body"><p class="text-secondary">核对当前材料 v{{r.version}} 后操作。确认通知会真实发给当前申请人。</p>{% include 'procurement/decision.html' %}</div></section>
-<section class="card"><div class="card-header"><h2 class="card-title">补件与催办</h2></div><div class="card-body">{% if followups %}{% include 'procurement/followups.html' %}{% else %}<p class="text-secondary">当前没有补件或催办草稿。</p>{% endif %}</div></section>
+<section class="card" id="followup-records"><div class="card-header"><h2 class="card-title">补件与催办</h2></div><div class="card-body">{% if followups %}{% include 'procurement/followups.html' %}{% else %}<p class="text-secondary">当前没有补件或催办草稿。</p>{% endif %}</div></section>
 </aside></div>
 <footer class="detail-footer">审批决定与邮件投递分别留痕 · 所有操作限定当前部门</footer>
-</main></div></body></html>
+</main>
+{% endblock %}

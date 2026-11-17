@@ -1,0 +1,127 @@
+{% extends 'procurement/base.html' %}
+{% block content %}
+<main class="detail-container list-container">
+<header class="list-header">
+<div>
+<div class="eyebrow">{{'MAIL FOLLOW-UP' if active_page=='exceptions' else 'PURCHASE REQUESTS'}}</div>
+<h1>{{title}}</h1>
+<p class="text-secondary">{{'核实不确定的投递结果，或继续恢复待发送邮件。审批结论始终单独保留。' if active_page=='exceptions' else '查看本部门采购材料、审批结论和邮件进度，找到下一步需要处理的事项。'}}</p>
+</div>
+<a class="btn btn-outline-primary" href="{{url_for('inbox') if active_page=='exceptions' else url_for('inbox',view='exceptions')}}">{{'查看全部申请' if active_page=='exceptions' else '查看邮件异常待办'}}</a>
+</header>
+<section class="card filter-panel" aria-label="申请筛选">
+<div class="card-body">
+<form method="get" action="{{url_for('inbox')}}">
+{% if filters.view %}<input type="hidden" name="view" value="{{filters.view}}">{% endif %}
+<div class="filter-search">
+<label for="q">搜索申请</label>
+<input class="form-control" id="q" name="q" value="{{filters.q}}" placeholder="采购事项、申请人、用途或编号" maxlength="200">
+</div>
+<div>
+<label for="category">采购类别</label>
+<select class="form-select" id="category" name="category">
+<option value="">全部类别</option>{% for value,label in categories.items() %}<option value="{{value}}" {% if filters.category==value %}selected{% endif %}>{{label}}</option>{% endfor %}</select>
+</div>
+<div>
+<label for="decision">审批结论</label>
+<select class="form-select" id="decision" name="decision">
+<option value="">全部结论</option>{% for value,label in decision_filters.items() %}<option value="{{value}}" {% if filters.decision==value %}selected{% endif %}>{{label}}</option>{% endfor %}</select>
+</div>
+<div>
+<label for="mail">结果邮件</label>
+<select class="form-select" id="mail" name="mail">
+<option value="">全部邮件状态</option>{% for value,label in mail_filters.items() %}<option value="{{value}}" {% if filters.mail==value %}selected{% endif %}>{{label}}</option>{% endfor %}</select>
+</div>
+<div>
+<label for="task">下一步事项</label>
+<select class="form-select" id="task" name="task">
+<option value="">全部事项</option>{% for value,label in tasks.items() %}<option value="{{value}}" {% if filters.task==value %}selected{% endif %}>{{label}}</option>{% endfor %}</select>
+</div>
+<div class="filter-buttons">
+<button class="btn btn-primary" type="submit">筛选</button>
+<a class="btn" href="{{url_for('inbox',view=filters.view) if filters.view else url_for('inbox')}}">重置</a>
+</div>
+</form>
+</div>
+</section>
+<section class="card request-table-card" aria-labelledby="results-title">
+<div class="card-header">
+<div>
+<h2 class="card-title" id="results-title">{{'待处理邮件相关申请' if active_page=='exceptions' else '部门申请'}}</h2>
+<span class="text-secondary">当前筛选 {{result.total}} 笔 · 本部门共 {{result.department_total}} 笔</span>
+</div>
+<span class="text-secondary">第 {{result.page}} / {{result.pages}} 页</span>
+</div>
+<div class="table-responsive">
+<table class="table table-vcenter request-table">
+<caption class="visually-hidden">当前部门的采购申请及独立审批、邮件状态</caption>
+<thead>
+<tr>
+<th>采购事项 / 申请人</th>
+<th>类别 / 版本</th>
+<th>预计总额</th>
+<th>材料审查</th>
+<th>审批结论</th>
+<th>结果邮件</th>
+<th>补件进度</th>
+<th>下一步</th>
+</tr>
+</thead>
+<tbody>
+{% for row in result.rows %}<tr data-request-id="{{row.id}}">
+<td>
+<a class="request-title" href="{{url_for('detail',ident=row.id)}}">{{row.item}}</a>
+<div class="request-subtitle">#{{row.id}} · {{row.sender}}</div>
+</td>
+<td>{{categories[row.category]}}<div class="request-subtitle">v{{row.version}}</div>
+</td>
+<td class="request-amount">{{'¥ '+row.total if row.total else '待澄清'}}</td>
+<td>
+<span class="status-pill {{row.review_state or 'none'}}">{{review_states.get(row.review_state,'规则检查')}}</span>
+</td>
+<td>
+<span class="status-pill {{row.decision or 'pending'}}">{{'已'+decisions[row.decision] if row.decision else '待审批'}}</span>
+</td>
+<td>
+<span class="status-pill {{row.notification_status or 'none'}}">{{mail_filters.get(row.notification_status or 'none','待核实')}}</span>
+</td>
+<td>
+<span class="request-subtitle">{{row.followup_label}}</span>
+</td>
+<td>{% if row.task=='waiting_requester' %}<span class="request-subtitle">等待申请人补件</span>
+<br>
+<a href="{{url_for('detail',ident=row.id)}}">查看详情</a>{% else %}<a class="row-action" href="{{url_for('detail',ident=row.id)}}{{'#'+row.anchor if row.anchor else ''}}">{{row.task_label}}</a>{% endif %}</td>
+</tr>
+{% else %}<tr>
+<td colspan="8">
+<div class="list-empty">
+<strong>没有符合条件的申请</strong>
+<p>可以调整筛选条件；这里仅展示你有权限处理的部门记录。</p>
+<a href="{{url_for('inbox',view=filters.view) if filters.view else url_for('inbox')}}">清除筛选</a>
+</div>
+</td>
+</tr>{% endfor %}
+</tbody>
+</table>
+</div>
+<footer class="table-footer">
+<span>共 {{result.total}} 笔 · 每页20笔</span>
+<nav aria-label="结果分页">{% if result.page>1 %}<a class="btn btn-sm" href="{{page_link(result.page-1)}}">上一页</a>{% else %}<span class="page-disabled">上一页</span>{% endif %}{% if result.page<result.pages %}<a class="btn btn-sm" href="{{page_link(result.page+1)}}">下一页</a>{% else %}<span class="page-disabled">下一页</span>{% endif %}</nav>
+</footer>
+</section>
+{% if changes %}<section class="card assignment-panel">
+<div class="card-header">
+<h2 class="card-title">补件归属待确认</h2>
+</div>
+<div class="card-body">{% for change in changes %}<form method="post" action="{{url_for('assign')}}">
+<p>{{change.sender}}</p>
+<blockquote>{{change.body}}</blockquote>
+<input type="hidden" name="csrf" value="{{session.csrf}}">
+<input type="hidden" name="key" value="{{change.mail_key}}">{% for id in change.candidates %}<div>
+<a href="{{url_for('detail',ident=id)}}">查看候选申请 #{{id}}</a>
+<button class="btn btn-sm btn-outline-primary" name="ident" value="{{id}}">归入申请 #{{id}}</button>
+</div>{% endfor %}</form>{% endfor %}</div>
+</section>{% endif %}
+<footer class="detail-footer">审批结论与邮件投递独立展示 · 仅显示当前部门数据</footer>
+</main>
+{% endblock %}

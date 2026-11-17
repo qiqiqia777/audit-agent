@@ -10,12 +10,29 @@ import smtplib
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, abort, redirect, render_template, render_template_string, request, session, url_for
+from flask import (
+    Flask,
+    abort,
+    redirect,
+    render_template,
+    render_template_string,
+    request,
+    session,
+    url_for,
+)
 from werkzeug.security import check_password_hash
 
 from email_agent.config import AppConfig
 from email_agent.procurement import ProcurementStore, result_notice
 from email_agent.procurement_presentation import history_events, local_time
+from email_agent.procurement_listing import (
+    CATEGORIES,
+    DECISION_FILTERS,
+    MAIL_FILTERS,
+    TASKS,
+    parse_filters,
+    select_requests,
+)
 from email_agent.sending.smtp import send_email
 from email_agent.sending.whitelist import is_allowed
 
@@ -97,19 +114,32 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
 
     @app.get("/")
     def inbox():
-        rows = store.inbox(managers[session["manager"]]["department"])
-        return page(
-            "部门采购申请",
-            """<ul>{% for r in rows %}<li>
-            <a href="{{url_for('detail', ident=r.id)}}">申请 #{{r.id}}</a> · {{r.sender}} ·
-            {{decisions.get(r.decision,'待审批')}} {{states.get(r.notification_status,'')}}</li>
-            {% else %}<li>暂无申请</li>{% endfor %}</ul>{% for change in changes %}<form method="post" action="/assign">
-            <h2>补件归属待确认</h2><p>{{change.sender}} · {{change.body}}</p>
-            <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="key" value="{{change.mail_key}}">
-            {% for id in change.candidates %}<p><a href="{{url_for('detail',ident=id)}}">查看候选申请 #{{id}}</a>
-            <button name="ident" value="{{id}}">归入申请 #{{id}}</button></p>{% endfor %}</form>{% endfor %}""",
-            rows=rows,
-            changes=store.pending_changes(managers[session["manager"]]["department"]),
+        department = managers[session["manager"]]["department"]
+        try:
+            filters, page_number = parse_filters(request.args)
+        except ValueError:
+            abort(400)
+        result = select_requests(store, department, filters, page_number)
+
+        def page_link(number):
+            return url_for("inbox", **{k: v for k, v in filters.items() if v}, page=number)
+
+        return render_template(
+            "procurement/list.html",
+            title="邮件异常待办" if filters["view"] == "exceptions" else "申请列表",
+            department=department,
+            active_page="exceptions" if filters["view"] == "exceptions" else "list",
+            filters=filters,
+            result=result,
+            page_link=page_link,
+            categories=CATEGORIES,
+            decision_filters=DECISION_FILTERS,
+            mail_filters=MAIL_FILTERS,
+            tasks=TASKS,
+            review_states=REVIEW_STATES,
+            decisions=DECISIONS,
+            states=STATES,
+            changes=store.pending_changes(department),
         )
 
     @app.post("/assign")
