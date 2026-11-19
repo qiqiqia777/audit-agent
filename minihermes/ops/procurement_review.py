@@ -13,6 +13,52 @@ from minihermes.tools.registry import Tool, ToolRegistry
 POLICY_PATH = Path(__file__).with_name("procurement_policy.json")
 
 
+def _software_scope_supported(basis, quote, sources):
+    scopes = {
+        "per_seat": r"(?:每|单)(?:个)?(?:席位|席)|/\s*(?:席位|席)",
+        "all_seats": r"(?:全部|所有)(?:[0-9一二三四五六七八九十两]+)?(?:个)?(?:席位|席)",
+    }
+    if basis not in scopes:
+        return False
+    # A scope word in a request for seats is not a statement about the price.
+    # Match a price-bearing phrase around the quoted word in the original source.
+    price_tail = (
+        r"(?:的|合计|共计|总计|一共|总共|共|打包|价格|报价|单价|费用|收费|为|是|"
+        r"每(?:个)?(?:月|季度|年)|每季|按月|按季|按年|月费|季费|年费|月|季|年|[:：\s])*"
+        r"[0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?\s*元"
+    )
+    supported = set()
+    for source in sources:
+        for occurrence in re.finditer(re.escape(quote), source):
+            for scope_basis, pattern in scopes.items():
+                for scope in re.finditer(pattern, quote):
+                    start = occurrence.start() + scope.start()
+                    end = occurrence.start() + scope.end()
+                    prefix = re.split(r"[。！？?；;\n]", source[:start])[-1]
+                    suffix = re.split(r"[。！？?；;\n]", source[end:])[0]
+                    sentence = prefix + scope.group() + suffix
+                    clause_prefix = re.split(r"[，,]", prefix)[-1].rsplit("而是", 1)[-1]
+                    clause = clause_prefix + scope.group() + re.split(r"[，,]", suffix)[0]
+                    if (
+                        re.search(r"(?:不|未|非|禁止).{0,16}$", clause_prefix)
+                        or re.search(r"是否|是不是|还是|待确认|不明确|不清楚|吗", clause)
+                        or re.search(
+                            r"(?:覆盖范围|报价口径|价格口径).{0,8}(?:待确认|未明确|不明确|不清楚|未知)",
+                            sentence,
+                        )
+                        or re.search(r"(?:还是|或是)\s*(?:按)?(?:每席|单席|全部|所有)", sentence)
+                        or re.match(r"^[^，,。！？?；;\n]*[？?]", source[end:])
+                    ):
+                        continue
+                    if (
+                        re.match(price_tail, source[end:])
+                        or (scope.group().startswith("/") and re.search(r"[0-9]\s*元\s*$", prefix))
+                        or re.search(r"(?:费用口径|报价口径|报价覆盖范围)\s*[:：]\s*$", prefix)
+                    ):
+                        supported.add(scope_basis)
+    return supported == {basis}
+
+
 def review_request(client, model, snapshot, max_iterations=6):
     """snapshot is assembled by the authorized backend, never by model arguments."""
     policy = json.loads(POLICY_PATH.read_text(encoding="utf-8"))
@@ -60,6 +106,13 @@ def review_request(client, model, snapshot, max_iterations=6):
         if not isinstance(materials, dict) or not materials.keys() <= fields:
             raise ValueError("包含未定义的材料字段")
         for field, value in snapshot.get("confirmed_materials", {}).items():
+            # The rule parser may match a negated price expression. Only a
+            # supported scope is immutable; an unsupported guess must be omittable.
+            if category == "software" and field == "price_basis" and not any(
+                _software_scope_supported(value, source, [source])
+                for source in snapshot["sources"]
+            ):
+                continue
             if (
                 field not in materials
                 or materials[field] != value
@@ -76,6 +129,15 @@ def review_request(client, model, snapshot, max_iterations=6):
                 or not any(quote in s for s in sources)
             ):
                 raise ValueError(f"{field} 的原文依据无法核对")
+        if category == "software" and "price_basis" in materials:
+            basis = materials["price_basis"]
+            quote = evidence["price_basis"]
+            if not _software_scope_supported(basis, quote, sources):
+                raise ValueError(
+                    "price_basis 的引文未明确支持所选报价覆盖范围，不能仅凭元/月或席位数量推断；"
+                    "请提供明确的每席/全部席位报价原文，无法确认时从materials和evidence省略"
+                    "price_basis并保留其他已知材料"
+                )
         if "amount" in materials:
             amount = str(materials["amount"])
             quote = evidence["amount"].strip()

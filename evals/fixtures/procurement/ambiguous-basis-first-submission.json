@@ -1,0 +1,29 @@
+{
+  "source": "scenarios-20261117/ambiguous-basis-trial-1/stage-1/calls.json",
+  "submission": {
+    "materials": {
+      "item": "设计软件",
+      "purpose": "用于出图",
+      "seats": 5,
+      "months": 12,
+      "billing_period": "monthly",
+      "amount": "120",
+      "price_basis": "per_seat"
+    },
+    "evidence": {
+      "item": "申请订阅设计软件用于出图",
+      "purpose": "用于出图",
+      "seats": "需要5个席位",
+      "months": "订阅12个月",
+      "amount": "报价120元/月",
+      "billing_period": "120元/月",
+      "price_basis": "报价120元/月"
+    },
+    "clause_ids": [
+      "SW-1",
+      "SW-2"
+    ],
+    "case_ids": [],
+    "summary": "软件采购申请：设计软件用于出图，需要5个席位，订阅12个月，报价120元/月。但SW-2条款要求明确报价覆盖单席还是全部席位，原文表述存在歧义，需要申请人进一步澄清。"
+  }
+}

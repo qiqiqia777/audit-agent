@@ -1,0 +1,126 @@
+[
+  {
+    "trial": 1,
+    "submission_number": 1,
+    "source": "scenarios-20261117/ambiguous-basis-trial-1/stage-1/calls.json",
+    "submission": {
+      "materials": {
+        "item": "设计软件",
+        "purpose": "用于出图",
+        "seats": 5,
+        "months": 12,
+        "billing_period": "monthly",
+        "amount": "120",
+        "price_basis": "per_seat"
+      },
+      "evidence": {
+        "item": "申请订阅设计软件用于出图",
+        "purpose": "用于出图",
+        "seats": "需要5个席位",
+        "months": "订阅12个月",
+        "amount": "报价120元/月",
+        "billing_period": "120元/月",
+        "price_basis": "报价120元/月"
+      },
+      "clause_ids": [
+        "SW-1",
+        "SW-2"
+      ],
+      "case_ids": [],
+      "summary": "软件采购申请：设计软件用于出图，需要5个席位，订阅12个月，报价120元/月。但SW-2条款要求明确报价覆盖单席还是全部席位，原文表述存在歧义，需要申请人进一步澄清。"
+    }
+  },
+  {
+    "trial": 2,
+    "submission_number": 1,
+    "source": "scenarios-20261117/ambiguous-basis-trial-2/stage-1/calls.json",
+    "submission": {
+      "materials": {
+        "item": "设计软件",
+        "purpose": "出图",
+        "seats": 5,
+        "months": 12,
+        "amount": "120",
+        "billing_period": "monthly",
+        "price_basis": "per_seat"
+      },
+      "evidence": {
+        "item": "设计软件",
+        "purpose": "出图",
+        "seats": "需要5个席位",
+        "months": "订阅12个月",
+        "amount": "报价120元/月",
+        "billing_period": "元/月",
+        "price_basis": "报价120元/月"
+      },
+      "clause_ids": [
+        "SW-1",
+        "SW-2"
+      ],
+      "case_ids": [],
+      "summary": "申请材料基本完整，包含设计软件的采购对象、出图业务用途、5个席位、12个月订阅期限、120元/月报价及按月计费。根据上下文推断为单席计费模式。符合SW-1条款要求，SW-2条款要求基本满足，但报价覆盖范围在原文中未明确说明。"
+    }
+  },
+  {
+    "trial": 3,
+    "submission_number": 1,
+    "source": "scenarios-20261117/ambiguous-basis-trial-3/stage-1/calls.json",
+    "submission": {
+      "materials": {
+        "item": "设计软件",
+        "purpose": "用于出图",
+        "seats": 5,
+        "months": 12,
+        "amount": "120",
+        "billing_period": "monthly",
+        "price_basis": "per_seat"
+      },
+      "evidence": {
+        "item": "申请订阅设计软件用于出图",
+        "purpose": "用于出图",
+        "seats": "5个席位",
+        "months": "12个月",
+        "amount": "120元/月",
+        "billing_period": "monthly",
+        "price_basis": "120元/月（按月报价，推测为单席价格）"
+      },
+      "clause_ids": [
+        "SW-1",
+        "SW-2"
+      ],
+      "case_ids": [],
+      "summary": "申请订阅设计软件用于出图，5个席位，12个月订阅期，月报价120元。符合SW-1条款要求，但SW-2条款要求明确报价覆盖单席还是全部席位，原文未明确说明，存在缺项。"
+    }
+  },
+  {
+    "trial": 3,
+    "submission_number": 2,
+    "source": "scenarios-20261117/ambiguous-basis-trial-3/stage-1/calls.json",
+    "submission": {
+      "materials": {
+        "item": "设计软件",
+        "purpose": "用于出图",
+        "seats": 5,
+        "months": 12,
+        "amount": "120",
+        "billing_period": "monthly",
+        "price_basis": "per_seat"
+      },
+      "evidence": {
+        "item": "申请订阅设计软件用于出图",
+        "purpose": "用于出图",
+        "seats": "5个席位",
+        "months": "12个月",
+        "amount": "120元/月",
+        "billing_period": "月",
+        "price_basis": "120元/月"
+      },
+      "clause_ids": [
+        "SW-1",
+        "SW-2"
+      ],
+      "case_ids": [],
+      "summary": "申请订阅设计软件用于出图，5个席位，12个月订阅期，月报价120元。符合SW-1条款要求，但SW-2条款要求明确报价覆盖单席还是全部席位，原文未明确说明，存在缺项。"
+    }
+  }
+]
