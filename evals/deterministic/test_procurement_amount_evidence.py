@@ -1,10 +1,56 @@
 """Reject invented quote amounts through the public intake/worker boundary."""
 
+import copy
+
 import pytest
 
 from email_agent.procurement_worker import work_once
 from evals.deterministic.test_procurement_model_review import MATERIALS, new_application, script
 from evals.helpers import ScriptedClient, response, text_block, tool_block
+
+
+@pytest.mark.parametrize("amount", ["120元", "120元/季度", "1,20", 120, "600"])
+def test_quarterly_amount_feedback_allows_source_preserving_correction(tmp_path, amount):
+    body = "申请订阅设计软件用于出图，需要5个席位，订阅12个月，每席位每季度120元。"
+    store, ident, _ = new_application(tmp_path, body)
+    materials = MATERIALS | {"billing_period": "quarterly"}
+    submission = {
+        "materials": materials | {"amount": amount},
+        "evidence": {key: body for key in materials},
+        "clause_ids": ["SW-1", "SW-2"],
+        "case_ids": [],
+        "summary": "按原文季度报价提交。",
+    }
+    client = ScriptedClient([
+        response([tool_block(name, {}, name) for name in
+                  ("read_request", "read_policy", "search_cases")], "tool_use"),
+        response([tool_block("submit_review", submission, "bad")], "tool_use"),
+        response([tool_block("submit_review", submission | {"materials": materials}, "ok")], "tool_use"),
+        response([text_block("已提交")]),
+    ])
+    requests = []
+    create = client.messages.create
+
+    def capture(**kwargs):
+        requests.append(copy.deepcopy(kwargs))
+        return create(**kwargs)
+
+    client.messages.create = capture
+    assert work_once(store, client, "offline-test")
+    feedback = requests[2]["messages"][-1]["content"][0]["content"]
+    assert "amount" in feedback
+    if amount == "600":
+        assert "原文" in feedback and "不能先乘" in feedback
+    else:
+        assert "纯数字字符串" in feedback and '"120"' in feedback
+    schema = next(t for t in requests[0]["tools"] if t["name"] == "submit_review")
+    description = schema["input_schema"]["properties"]["materials"]["properties"]["amount"]["description"]
+    assert "纯数字字符串" in description and '"120"' in description
+    record = store.detail(ident, "设计")
+    assert record["model_review"]["state"] == "completed"
+    assert record["materials"]["amount"] == "120"
+    assert record["review"]["estimated_total_cny"] == "2400.00"
+    assert record["review"]["questions"] == []
 
 
 @pytest.mark.parametrize(
