@@ -55,3 +55,7 @@ fixture逐字提取自 `scenarios-20261117-extra/latest-of-two-changes-trial-1/s
 ## 最终工程复核 · 2026-11-20 17:46 +08:00
 
 完整 release gate：374 passed、11既有live skipped；默认Anthropic无key，通用judge跳过。Ruff、运行时skills校验、diffcheck通过。独立Standards/Spec已复核最终产品f049491，无剩余代码问题，各复跑JSON/金额证据40项通过。真实模型仍为13阶段服务失败、候选11阶段未跑；不作能力比较。代码可审阅，验收项保持开放。
+
+## 2026-11-20 用户授权改用DeepSeek后的续办
+
+用户明确要求“换成deepseek的api吧”并填写本地配置，选择deepseek-v4-flash。上文GLM资源阻塞是历史结果，已另建DeepSeek即时基线/候选配对完成本子任务真实场景验收：连续5→8→6席及月付对照各3次，两组各12/12阶段业务与保存建议通过，候选首次12/12、反馈纠正0/12、最终失败0/12。本组没有JSON错误，不宣称真实纠正或成功率提升（基线亦12/12）。原GLM服务失败/11阶段未跑、历史JSON失败及脚本回放均保留。详细条件、逐阶段数据库/建议、调用统计和限制见[DeepSeek续办报告](procurement-json-deepseek-verification.md)。
