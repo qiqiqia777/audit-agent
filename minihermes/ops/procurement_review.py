@@ -14,49 +14,84 @@ POLICY_PATH = Path(__file__).with_name("procurement_policy.json")
 
 
 def _software_scope_supported(basis, quote, sources):
+    return _software_scope_error(basis, quote, sources) is None
+
+
+def _software_scope_error(basis, quote, sources):
     scopes = {
         "per_seat": r"(?:每|单)(?:个)?(?:席位|席)|/\s*(?:席位|席)",
         "all_seats": r"(?:全部|所有)(?:[0-9一二三四五六七八九十两]+)?(?:个)?(?:席位|席)",
     }
     if basis not in scopes:
-        return False
-    # A scope word in a request for seats is not a statement about the price.
-    # Match a price-bearing phrase around the quoted word in the original source.
+        return "未定义的报价覆盖范围"
+    # Inspect all price claims, not only the model's selected substring. Sources
+    # are chronological; only an explicit correction retires earlier claims.
     price_tail = (
         r"(?:的|合计|共计|总计|一共|总共|共|打包|价格|报价|单价|费用|收费|为|是|"
         r"每(?:个)?(?:月|季度|年)|每季|按月|按季|按年|月费|季费|年费|月|季|年|[:：\s])*"
         r"[0-9]+(?:,[0-9]{3})*(?:\.[0-9]{1,2})?\s*元"
     )
-    supported = set()
-    for source in sources:
-        for occurrence in re.finditer(re.escape(quote), source):
-            for scope_basis, pattern in scopes.items():
-                for scope in re.finditer(pattern, quote):
-                    start = occurrence.start() + scope.start()
-                    end = occurrence.start() + scope.end()
-                    prefix = re.split(r"[。！？?；;\n]", source[:start])[-1]
-                    suffix = re.split(r"[。！？?；;\n]", source[end:])[0]
-                    sentence = prefix + scope.group() + suffix
-                    clause_prefix = re.split(r"[，,]", prefix)[-1].rsplit("而是", 1)[-1]
-                    clause = clause_prefix + scope.group() + re.split(r"[，,]", suffix)[0]
-                    if (
-                        re.search(r"(?:不|未|非|禁止).{0,16}$", clause_prefix)
-                        or re.search(r"是否|是不是|还是|待确认|不明确|不清楚|吗", clause)
-                        or re.search(
-                            r"(?:覆盖范围|报价口径|价格口径).{0,8}(?:待确认|未明确|不明确|不清楚|未知)",
-                            sentence,
-                        )
-                        or re.search(r"(?:还是|或是)\s*(?:按)?(?:每席|单席|全部|所有)", sentence)
-                        or re.match(r"^[^，,。！？?；;\n]*[？?]", source[end:])
-                    ):
-                        continue
-                    if (
-                        re.match(price_tail, source[end:])
-                        or (scope.group().startswith("/") and re.search(r"[0-9]\s*元\s*$", prefix))
-                        or re.search(r"(?:费用口径|报价口径|报价覆盖范围)\s*[:：]\s*$", prefix)
-                    ):
-                        supported.add(scope_basis)
-    return supported == {basis}
+    claims = []
+    invalid = []
+    for source_index, source in enumerate(sources):
+        matches = sorted(
+            [(m.start(), m.end(), key, m.group()) for key, pattern in scopes.items()
+             for m in re.finditer(pattern, source)]
+        )
+        for start, end, scope_basis, scope_text in matches:
+            prefix = re.split(r"[。！？?；;\n]", source[:start])[-1]
+            suffix = re.split(r"[。！？?；;\n]", source[end:])[0]
+            sentence = prefix + scope_text + suffix
+            clause_prefix = re.split(r"[，,]", prefix)[-1].rsplit("而是", 1)[-1]
+            clause_suffix = re.split(r"[，,]", suffix)[0]
+            clause = clause_prefix + scope_text + clause_suffix
+            price = re.match(price_tail, source[end:])
+            if not (
+                price
+                or (scope_text.startswith("/") and re.search(r"[0-9]\s*元\s*$", prefix))
+                or re.search(r"(?:费用口径|报价口径|报价覆盖范围)\s*[:：]\s*$", prefix)
+            ):
+                continue
+            # Postfix qualifiers belong to this price clause. A later
+            # comma-separated tax/purpose question does not revoke it.
+            after_price = clause_suffix[price.end():] if price else clause_suffix
+            after_price = re.sub(r"^(?:/\s*(?:席位|席|月|季度|季|年))*", "", after_price)
+            if (
+                re.search(r"(?:不|未|非|禁止).{0,16}$", clause_prefix)
+                or re.search(r"是否|是不是|还是|待确认|尚未确认|未经确认|不明确|不清楚|吗", clause)
+                or re.match(r"(?:的)?(?:说法|报价|价格|口径)?(?:是|为)?(?:错误|有误|不正确|不成立|已撤回|作废)", after_price)
+                or re.search(
+                    r"[，,]\s*(?:以上|上述|该|此)(?:报价|价格|说法|口径)(?:已|是|为)?"
+                    r"(?:撤回|作废|错误|有误|尚未确认|待确认)", suffix,
+                )
+                or re.search(
+                    r"(?:覆盖范围|报价口径|价格口径).{0,8}(?:待确认|未明确|不明确|不清楚|未知)",
+                    sentence,
+                )
+                or re.search(r"(?:还是|或是)\s*(?:按)?(?:每席|单席|全部|所有)", sentence)
+                or re.match(r"^[^，,。！？?；;\n]*[？?]", source[end:])
+            ):
+                claims = [claim for claim in claims if claim[0] != scope_basis]
+                invalid.append("报价覆盖范围已被否定、尚未确认或存在疑问")
+                continue
+            if re.search(r"(?:现确认|现更正为|更正为|改为|而是)\s*$", prefix):
+                claims.clear()
+                invalid.clear()
+            claims.append((scope_basis, source_index, start, end))
+    supported = {claim[0] for claim in claims}
+    if len(supported) > 1:
+        return "同一报价存在未解决的单席与全部席位覆盖范围冲突"
+    if supported != {basis}:
+        return invalid[-1] if invalid else "原文报价未明确支持所选覆盖范围"
+    # The citation must point to a surviving claim, not an obsolete or negated
+    # occurrence of the same scope in an earlier message.
+    for key, index, start, end in claims:
+        if key == basis and any(
+            occurrence.start() < end and occurrence.end() > start
+            for occurrence in re.finditer(re.escape(quote), sources[index])
+        ):
+            return None
+    return "引文未指向当前有效的报价覆盖范围，旧报价可能已被更正"
 
 
 def review_request(client, model, snapshot, max_iterations=6):
@@ -109,7 +144,7 @@ def review_request(client, model, snapshot, max_iterations=6):
             # The rule parser may match a negated price expression. Only a
             # supported scope is immutable; an unsupported guess must be omittable.
             if category == "software" and field == "price_basis" and not any(
-                _software_scope_supported(value, source, [source])
+                _software_scope_supported(value, source, snapshot["sources"])
                 for source in snapshot["sources"]
             ):
                 continue
@@ -132,9 +167,10 @@ def review_request(client, model, snapshot, max_iterations=6):
         if category == "software" and "price_basis" in materials:
             basis = materials["price_basis"]
             quote = evidence["price_basis"]
-            if not _software_scope_supported(basis, quote, sources):
+            scope_error = _software_scope_error(basis, quote, sources)
+            if scope_error:
                 raise ValueError(
-                    "price_basis 的引文未明确支持所选报价覆盖范围，不能仅凭元/月或席位数量推断；"
+                    f"price_basis：{scope_error}，不能仅凭元/月或席位数量推断；"
                     "请提供明确的每席/全部席位报价原文，无法确认时从materials和evidence省略"
                     "price_basis并保留其他已知材料"
                 )
