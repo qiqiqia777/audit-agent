@@ -64,7 +64,8 @@ def test_original_wrong_scope_can_be_omitted_after_feedback_without_losing_known
     assert record["review"]["status"] == "needs_clarification"
     assert [q["field"] for q in record["review"]["questions"]] == ["price_basis"]
     assert record["decision"] is None
-    assert record["review"]["model_summary"] == corrected["summary"]
+    assert record["review"]["model_draft_summary"] == corrected["summary"]
+    assert "报价是每席位价格，还是全部席位合计？" in record["review"]["model_summary"]
     feedback = [b["content"] for batch in requests for msg in batch
                 if isinstance(msg.get("content"), list) for b in msg["content"]
                 if isinstance(b, dict) and b.get("type") == "tool_result"
@@ -99,7 +100,8 @@ def test_explicit_correction_replaces_old_scope_and_rejects_old_citation(tmp_pat
     assert record["materials"]["price_basis"] == "all_seats"
     assert record["review"]["estimated_total_cny"] == "1440.00"
     assert record["review"]["questions"] == []
-    assert record["review"]["model_summary"] == correct["summary"]
+    assert record["review"]["model_draft_summary"] == correct["summary"]
+    assert "1440.00" in record["review"]["model_summary"]
 
 
 @pytest.mark.parametrize("withdrawal", [
