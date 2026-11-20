@@ -25,6 +25,18 @@ from types import SimpleNamespace
 from minihermes.config import Settings
 
 
+def _tool_use(call_id, name, raw_arguments, extra=None):
+    """Keep broken wire arguments intact so the loop can ask for a correction."""
+    block = SimpleNamespace(type="tool_use", id=call_id, name=name, extra=extra)
+    try:
+        block.input = json.loads(raw_arguments or "{}")
+    except json.JSONDecodeError as exc:
+        block.input = {}
+        block.raw_arguments = raw_arguments
+        block.argument_error = str(exc)
+    return block
+
+
 @dataclass(frozen=True)
 class Provider:
     kind: str        # 'anthropic' or 'openai' — the wire format
@@ -167,7 +179,8 @@ class OpenAICompatClient:
                     if getattr(b, "type", "") != "tool_use":
                         continue
                     call = {"id": b.id, "type": "function",
-                            "function": {"name": b.name, "arguments": json.dumps(b.input)}}
+                            "function": {"name": b.name, "arguments": getattr(
+                                b, "raw_arguments", json.dumps(b.input))}}
                     extra = getattr(b, "extra", None)   # Gemini thought_signature
                     if extra:
                         call["extra_content"] = extra
@@ -228,9 +241,8 @@ class OpenAICompatClient:
         if choice.content:
             blocks.append(SimpleNamespace(type="text", text=choice.content))
         for call in choice.tool_calls or []:
-            blocks.append(SimpleNamespace(
-                type="tool_use", id=call.id, name=call.function.name,
-                input=json.loads(call.function.arguments or "{}"),
+            blocks.append(_tool_use(
+                call.id, call.function.name, call.function.arguments,
                 # Gemini's thinking models attach a thought_signature here and
                 # REQUIRE it echoed back with the tool call next turn, else the
                 # follow-up 400s ("missing a thought_signature"). Carry it so
@@ -302,9 +314,7 @@ class _OpenAIStream:
         if text:
             blocks.append(SimpleNamespace(type="text", text=text))
         for slot in self._tools.values():
-            blocks.append(SimpleNamespace(
-                type="tool_use", id=slot["id"], name=slot["name"],
-                input=json.loads(slot["args"] or "{}")))
+            blocks.append(_tool_use(slot["id"], slot["name"], slot["args"]))
         usage = self._usage
         return SimpleNamespace(
             stop_reason="tool_use" if self._tools else "end_turn",

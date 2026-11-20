@@ -8,6 +8,7 @@ from contextlib import closing, contextmanager
 from email_agent.config import AppConfig
 from email_agent.procurement import ProcurementStore
 from minihermes.config import Settings
+from minihermes.loop.agent import ToolArgumentsExhausted
 from minihermes.loop.models import get_client
 from minihermes.ops.procurement_review import review_request
 
@@ -45,6 +46,8 @@ def work_once(store, client, model, max_iterations=6):
         return True
     try:
         result = review_request(client, model, work["snapshot"], max_iterations=max_iterations)
+    except ToolArgumentsExhausted as exc:
+        store.finish_review(work["job"], result=exc.diagnostics, error=exc.failure_class)
     except Exception as exc:
         # Persist an actionable category, never provider error bodies or credentials.
         store.finish_review(work["job"], error=type(exc).__name__)

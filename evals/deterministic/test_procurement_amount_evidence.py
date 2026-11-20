@@ -173,7 +173,8 @@ def test_missing_tool_submission_gets_feedback_within_original_iteration_budget(
     client.messages.create = record_request
     assert work_once(store, client, "offline-test", max_iterations=budget)
     record = store.detail(ident, "设计")
-    assert len(requests) == budget
+    # A valid submission is terminal; no extra model call is needed to close it.
+    assert len(requests) == min(budget, 3)
     assert record["model_review"]["state"] == ("completed" if budget == 4 else "failed")
     assert record["review"]["estimated_total_cny"] == ("7200.00" if budget == 4 else None)
 
