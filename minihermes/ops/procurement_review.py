@@ -223,16 +223,30 @@ def review_request(client, model, snapshot, max_iterations=6):
         if not isinstance(summary, str) or not summary.strip():
             raise ValueError("请提供审查摘要")
         report = (review_equipment if category == "equipment" else review_subscription)(materials)
+        # Manager advice and the receipt use the same computed result. Keep the
+        # model's draft separately so a successful backend guard is not mistaken
+        # for the model having identified the missing information itself.
+        total = report["estimated_total_cny"]
+        advice = "待澄清。" if report["questions"] else "材料核验完成，待负责人审批。"
+        advice += "预计总额待确认。" if total is None else f"预计总额 {total} 元。"
+        advice += "".join(question["question"] for question in report["questions"])
+        advice += "审批和发信仍须负责人确认。"
         report.update(
             policy_version=policy["version"],
             clauses=clauses,
             cited_clause_ids=clause_ids,
             cited_case_ids=case_ids,
-            model_summary=summary,
+            model_summary=advice,
+            model_draft_summary=summary,
             evidence=evidence,
         )
         submitted.append({"materials": materials, "review": report})
-        return "已保存待核对建议；审批和发信仍由负责人确认。"
+        return json.dumps({
+            "status": report["status"],
+            "estimated_total_cny": total,
+            "questions": report["questions"],
+            "summary": report["model_summary"],
+        }, ensure_ascii=False)
 
     empty = {"type": "object", "properties": {}, "additionalProperties": False}
     for name, fn, description in [

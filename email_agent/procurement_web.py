@@ -260,7 +260,7 @@ def create_app(store, managers, deliver, wait_seconds=48 * 3600):
             {% if not r.decision and r.model_review.state in ['failed','completed'] %}<form method="post">
             <input type="hidden" name="csrf" value="{{session.csrf}}"><input type="hidden" name="version" value="{{r.version}}">
             <button name="recheck">重新审查当前材料</button></form>{% endif %}{% endif %}
-            {% if r.review.model_summary %}<h2>模型审查建议</h2><p>{{r.review.model_summary}}</p>
+            {% if r.review.model_summary %}<h2>{{'材料核验建议' if r.review.model_draft_summary is defined else '模型审查建议'}}</h2><p>{{r.review.model_summary}}</p>
             {% for field,quote in r.review.evidence.items() %}<p>{{labels.get(field,field)}}原文依据：{{quote}}</p>{% endfor %}{% endif %}
             <p>预计总额 {{r.review.estimated_total_cny or '待核实'}} 元</p><h2>{{r.review.policy_version}}</h2>
             {% for k,v in r.review.clauses.items() %}<p>{{k}} · {{v}}</p>{% endfor %}
