@@ -140,6 +140,15 @@ def review_request(client, model, snapshot, max_iterations=6):
         )
         if not isinstance(materials, dict) or not materials.keys() <= fields:
             raise ValueError("包含未定义的材料字段")
+        if "amount" in materials and (
+            not isinstance(materials["amount"], str)
+            or not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", materials["amount"])
+        ):
+            raise ValueError(
+                'amount 必须为以元计的纯数字字符串，如 "120" 或 "120.50"，最多两位小数；'
+                '不能含元、逗号或/季度等单位，也不能用JSON数值。原文120元应提交 "120"，'
+                "evidence.amount 保留逐字原文；请按原文金额更正，不能先乘席位、数量或期限"
+            )
         for field, value in snapshot.get("confirmed_materials", {}).items():
             # The rule parser may match a negated price expression. Only a
             # supported scope is immutable; an unsupported guess must be omittable.
@@ -175,7 +184,7 @@ def review_request(client, model, snapshot, max_iterations=6):
                     "price_basis并保留其他已知材料"
                 )
         if "amount" in materials:
-            amount = str(materials["amount"])
+            amount = materials["amount"]
             quote = evidence["amount"].strip()
             bounded_quote = (
                 (r"(?<![0-9.,+\-])" if quote[0].isdigit() else "")
@@ -203,11 +212,12 @@ def review_request(client, model, snapshot, max_iterations=6):
                 prices += re.findall(
                     r"(?:报价|预计费用)\s*[:：]\s*(" + number + r")(?![0-9.,])", quote
                 )
-            if not re.fullmatch(r"[0-9]+(?:\.[0-9]{1,2})?", amount) or not any(
+            if not any(
                 Decimal(price.replace(",", "")) == Decimal(amount) for price in prices
             ):
                 raise ValueError(
-                    "amount 必须与原文报价的数值一致，不能先乘席位或期限；请更正金额及引文"
+                    "amount 必须与原文报价的数值一致，不能先乘席位、数量或期限；"
+                    '如原文每席每季度120元，应提交 amount="120"，evidence.amount 保留逐字报价原文'
                 )
         if (
             not isinstance(clause_ids, list)
@@ -264,7 +274,11 @@ def review_request(client, model, snapshot, max_iterations=6):
         "purpose": {"type": "string", "description": "员工说明的业务用途"},
         "amount": {
             "type": "string",
-            "description": "原文报价金额，以元为单位；不得先乘席位数、数量或期限，必须与金额引文数值一致",
+            "description": (
+                '原文报价金额，以元计的纯数字字符串，如 "120"、"120.50"，最多两位小数；'
+                '不含元、逗号或/季度等单位，不用JSON数值。原文120元提交 "120"；'
+                "不得先乘席位数、数量或期限，必须与金额引文数值一致；evidence.amount保留逐字原文"
+            ),
         },
         "price_basis": {
             "type": "string",
